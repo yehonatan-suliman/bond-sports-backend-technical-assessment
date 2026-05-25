@@ -11,4 +11,38 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+model Account {
+  accountId            String   @id @default(uuid()) @db.Uuid
+  personId             String   @db.Uuid
+  balance              Decimal  @default(0) @db.Decimal(18, 2)
+  dailyWithdrawalLimit Decimal  @db.Decimal(18, 2)
+  activeFlag           Boolean  @default(true)
+  accountType          Int      @db.SmallInt
+  createDate           DateTime @default(now())
+
+  transactions Transaction[]
+
+  @@index([personId])
+  @@map("accounts")
+}
+
+model Transaction {
+  transactionId   String          @id @default(uuid()) @db.Uuid
+  accountId       String          @db.Uuid
+  value           Decimal         @db.Decimal(18, 2)
+  type            TransactionType
+  transactionDate DateTime        @default(now())
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId, transactionDate])
+  @@map("transactions")
 }
