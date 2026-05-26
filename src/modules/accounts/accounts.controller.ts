@@ -11,11 +11,11 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ParsePersonIdPipe } from '../../common/pipes/parse-person-id.pipe';
 import { AccountsService } from './accounts.service';
 import {
   AccountResponseDto,
   CreateAccountDto,
+  SearchAccountsDto,
   UpdateLimitDto,
 } from './dto/account.dto';
 
@@ -32,11 +32,11 @@ export class AccountsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all accounts for a person' })
-  async listByPerson(
-    @Query('personId', new ParsePersonIdPipe()) personId: string,
+  @ApiOperation({ summary: 'Search accounts by optional filters' })
+  async search(
+    @Query() filters: SearchAccountsDto,
   ): Promise<AccountResponseDto[]> {
-    const accounts = await this.service.listByPerson(personId);
+    const accounts = await this.service.search(filters);
     return accounts.map(AccountResponseDto.from);
   }
 
@@ -50,13 +50,14 @@ export class AccountsController {
   }
 
   @Patch(':accountId/limit')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update the daily withdrawal limit' })
   async updateLimit(
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
     @Body() dto: UpdateLimitDto,
-  ): Promise<AccountResponseDto> {
-    const account = await this.service.updateLimit(accountId, dto);
-    return AccountResponseDto.from(account);
+  ): Promise<{ message: string }> {
+    await this.service.updateLimit(accountId, dto);
+    return { message: 'Daily withdrawal limit updated' };
   }
 
   @Patch(':accountId/block')
@@ -64,9 +65,9 @@ export class AccountsController {
   @ApiOperation({ summary: 'Block (deactivate) an account' })
   async block(
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
-  ): Promise<AccountResponseDto> {
-    const account = await this.service.block(accountId);
-    return AccountResponseDto.from(account);
+  ): Promise<{ message: string }> {
+    await this.service.block(accountId);
+    return { message: 'Account blocked' };
   }
 
   @Patch(':accountId/activate')
@@ -74,8 +75,8 @@ export class AccountsController {
   @ApiOperation({ summary: 'Reactivate a blocked account' })
   async activate(
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
-  ): Promise<AccountResponseDto> {
-    const account = await this.service.activate(accountId);
-    return AccountResponseDto.from(account);
+  ): Promise<{ message: string }> {
+    await this.service.activate(accountId);
+    return { message: 'Account activated' };
   }
 }

@@ -3,11 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Account } from '../../generated/prisma/client';
+import { Account, Prisma } from '../../generated/prisma/client';
 import { ACCOUNT_TYPE_NAME } from '../../common/constants';
 import { toMoney } from '../../common/money';
 import { DatabaseService } from '../../database/database.service';
-import { CreateAccountDto, UpdateLimitDto } from './dto/account.dto';
+import {
+  CreateAccountDto,
+  SearchAccountsDto,
+  UpdateLimitDto,
+} from './dto/account.dto';
 
 @Injectable()
 export class AccountsService {
@@ -46,11 +50,49 @@ export class AccountsService {
     return account;
   }
 
-  async listByPerson(personId: string): Promise<Account[]> {
+  async search(filters: SearchAccountsDto): Promise<Account[]> {
+    const where: Prisma.AccountWhereInput = {
+      ...(filters.accountId ? { accountId: filters.accountId } : {}),
+      ...(filters.personId ? { personId: filters.personId } : {}),
+      ...(filters.accountType !== undefined
+        ? { accountType: filters.accountType }
+        : {}),
+      ...(filters.activeFlag !== undefined
+        ? { activeFlag: filters.activeFlag }
+        : {}),
+    };
+
+    const balance = this.toDecimalFilter(
+      filters.balance,
+      filters.minBalance,
+      filters.maxBalance,
+    );
+    if (balance !== undefined) where.balance = balance;
+
+    const limit = this.toDecimalFilter(
+      filters.dailyWithdrawalLimit,
+      filters.minDailyWithdrawalLimit,
+      filters.maxDailyWithdrawalLimit,
+    );
+    if (limit !== undefined) where.dailyWithdrawalLimit = limit;
+
     return this.db.account.findMany({
-      where: { personId },
+      where,
       orderBy: { createDate: 'desc' },
     });
+  }
+
+  private toDecimalFilter(
+    eq?: number,
+    min?: number,
+    max?: number,
+  ): Prisma.AccountWhereInput['balance'] {
+    if (eq !== undefined) return toMoney(eq);
+    if (min === undefined && max === undefined) return undefined;
+    return {
+      ...(min !== undefined ? { gte: toMoney(min) } : {}),
+      ...(max !== undefined ? { lte: toMoney(max) } : {}),
+    };
   }
 
   async updateLimit(accountId: string, dto: UpdateLimitDto): Promise<Account> {

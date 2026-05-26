@@ -25,7 +25,7 @@ export const createAccountSchema = z
     personId: personIdSchema,
     accountType: accountTypeInputSchema,
     dailyWithdrawalLimit: z.number().positive().multipleOf(0.01).default(500),
-    initialBalance: z.number().nonnegative().multipleOf(0.01).optional(),
+    initialBalance: z.number().nonnegative().multipleOf(0.01).default(0),
   })
   .strict();
 
@@ -38,6 +38,38 @@ export const updateLimitSchema = z
   .strict();
 
 export class UpdateLimitDto extends createZodDto(updateLimitSchema) {}
+
+const accountTypeQuerySchema = z
+  .union([
+    accountTypeNameSchema,
+    z.enum(['1', '2']).transform((s) => Number(s) as 1 | 2),
+  ])
+  .transform((value): AccountTypeValue =>
+    typeof value === 'string' ? ACCOUNT_TYPE[value] : value,
+  );
+
+const booleanQuerySchema = z
+  .enum(['true', 'false'])
+  .transform((value) => value === 'true');
+
+const moneyQuerySchema = z.coerce.number().nonnegative().multipleOf(0.01);
+
+export const searchAccountsSchema = z
+  .object({
+    accountId: z.uuid().optional(),
+    personId: personIdSchema.optional(),
+    accountType: accountTypeQuerySchema.optional(),
+    activeFlag: booleanQuerySchema.optional(),
+    balance: moneyQuerySchema.optional(),
+    minBalance: moneyQuerySchema.optional(),
+    maxBalance: moneyQuerySchema.optional(),
+    dailyWithdrawalLimit: moneyQuerySchema.optional(),
+    minDailyWithdrawalLimit: moneyQuerySchema.optional(),
+    maxDailyWithdrawalLimit: moneyQuerySchema.optional(),
+  })
+  .strict();
+
+export class SearchAccountsDto extends createZodDto(searchAccountsSchema) {}
 
 export const accountResponseSchema = z.object({
   accountId: z.uuid(),

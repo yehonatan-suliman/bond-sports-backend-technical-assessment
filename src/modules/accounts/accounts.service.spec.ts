@@ -66,20 +66,6 @@ describe('AccountsService', () => {
       expect(String(data.balance)).toBe('50');
     });
 
-    it('defaults initial balance to 0', async () => {
-      account.findUnique.mockResolvedValue(null);
-      account.create.mockResolvedValue(buildAccount());
-
-      await service.create({
-        personId: '12345678901234567890',
-        accountType: 2,
-        dailyWithdrawalLimit: 500,
-      });
-
-      const { data } = account.create.mock.calls[0][0];
-      expect(String(data.balance)).toBe('0');
-    });
-
     it('throws ConflictException when the person already has that account type', async () => {
       account.findUnique.mockResolvedValue(buildAccount());
 
@@ -88,6 +74,7 @@ describe('AccountsService', () => {
           personId: '12345678901234567890',
           accountType: 1,
           dailyWithdrawalLimit: 500,
+          initialBalance: 0,
         }),
       ).rejects.toBeInstanceOf(ConflictException);
 

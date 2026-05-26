@@ -118,7 +118,7 @@ All endpoints are mounted under `/accounts`. The full spec is in Swagger; quick 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/accounts` | Create an account |
-| `GET` | `/accounts?personId=…` | List accounts owned by a person |
+| `GET` | `/accounts?…` | Search accounts by optional filters (`accountId`, `personId`, `accountType`, `activeFlag`, `balance`/`minBalance`/`maxBalance`, `dailyWithdrawalLimit`/`minDailyWithdrawalLimit`/`maxDailyWithdrawalLimit`) |
 | `GET` | `/accounts/:accountId` | Get one account |
 | `PATCH` | `/accounts/:accountId/limit` | Update daily withdrawal limit |
 | `PATCH` | `/accounts/:accountId/block` | Block (deactivate) account |
