@@ -8,7 +8,6 @@ import { Test } from '@nestjs/testing';
 import { Decimal } from 'decimal.js';
 import { DatabaseService } from '../../database/database.service';
 import { Transaction } from '../../generated/prisma/client';
-import { TransactionsRepository } from './transactions.repository';
 import { TransactionsService } from './transactions.service';
 
 interface AccountRow {
@@ -37,57 +36,62 @@ const buildTx = (overrides: Partial<Transaction> = {}): Transaction => ({
   ...overrides,
 });
 
+type InnerTx = {
+  $queryRaw: jest.Mock;
+  transaction: { aggregate: jest.Mock; create: jest.Mock };
+  account: { update: jest.Mock };
+};
+
 describe('TransactionsService', () => {
   let service: TransactionsService;
-  let repository: jest.Mocked<TransactionsRepository>;
-  let queryRaw: jest.Mock;
-  let recordMock: jest.Mock;
+  let innerTx: InnerTx;
+  let db: {
+    account: { findUnique: jest.Mock };
+    transaction: { findMany: jest.Mock };
+    $transaction: jest.Mock;
+  };
 
   beforeEach(async () => {
-    queryRaw = jest.fn();
-    recordMock = jest.fn();
+    innerTx = {
+      $queryRaw: jest.fn(),
+      transaction: { aggregate: jest.fn(), create: jest.fn() },
+      account: { update: jest.fn() },
+    };
 
-    const innerTx = { $queryRaw: queryRaw };
-
-    const dbMock = {
+    db = {
       account: { findUnique: jest.fn() },
-      $transaction: jest.fn(async (fn: (tx: typeof innerTx) => unknown) => fn(innerTx)),
-    } as unknown as DatabaseService;
-
-    const repoMock = {
-      sumWithdrawalsInRange: jest.fn(),
-      record: recordMock,
-      findStatement: jest.fn(),
-    } as unknown as jest.Mocked<TransactionsRepository>;
+      transaction: { findMany: jest.fn() },
+      $transaction: jest.fn(async (fn: (tx: InnerTx) => unknown) => fn(innerTx)),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
         TransactionsService,
-        { provide: DatabaseService, useValue: dbMock },
-        { provide: TransactionsRepository, useValue: repoMock },
+        { provide: DatabaseService, useValue: db },
       ],
     }).compile();
 
     service = module.get(TransactionsService);
-    repository = module.get(TransactionsRepository);
   });
 
   describe('deposit', () => {
     it('credits the account and records the transaction', async () => {
-      queryRaw.mockResolvedValue([buildRow()]);
+      innerTx.$queryRaw.mockResolvedValue([buildRow()]);
+      innerTx.account.update.mockResolvedValue({});
       const created = buildTx({ value: new Decimal(250) as unknown as Transaction['value'] });
-      recordMock.mockResolvedValue({ transaction: created, account: {} });
+      innerTx.transaction.create.mockResolvedValue(created);
 
       const result = await service.deposit(ACCOUNT_ID, { value: 250 });
 
       expect(result).toBe(created);
-      const recordArg = recordMock.mock.calls[0][1];
-      expect(recordArg.type).toBe('DEPOSIT');
-      expect(String(recordArg.newBalance)).toBe('1250');
+      const createArg = innerTx.transaction.create.mock.calls[0][0];
+      expect(createArg.data.type).toBe('DEPOSIT');
+      const updateArg = innerTx.account.update.mock.calls[0][0];
+      expect(String(updateArg.data.balance)).toBe('1250');
     });
 
     it('rejects deposits to blocked accounts', async () => {
-      queryRaw.mockResolvedValue([buildRow({ active_flag: false })]);
+      innerTx.$queryRaw.mockResolvedValue([buildRow({ active_flag: false })]);
       await expect(service.deposit(ACCOUNT_ID, { value: 100 })).rejects.toBeInstanceOf(ForbiddenException);
     });
 
@@ -98,39 +102,42 @@ describe('TransactionsService', () => {
 
   describe('withdraw', () => {
     it('debits the account when within balance and daily limit', async () => {
-      queryRaw.mockResolvedValue([buildRow()]);
-      repository.sumWithdrawalsInRange.mockResolvedValue(new Decimal(0) as never);
+      innerTx.$queryRaw.mockResolvedValue([buildRow()]);
+      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(0) } });
+      innerTx.account.update.mockResolvedValue({});
       const created = buildTx({ type: 'WITHDRAWAL', value: new Decimal(200) as unknown as Transaction['value'] });
-      recordMock.mockResolvedValue({ transaction: created, account: {} });
+      innerTx.transaction.create.mockResolvedValue(created);
 
       const result = await service.withdraw(ACCOUNT_ID, { value: 200 });
 
       expect(result).toBe(created);
-      const recordArg = recordMock.mock.calls[0][1];
-      expect(recordArg.type).toBe('WITHDRAWAL');
-      expect(String(recordArg.newBalance)).toBe('800');
+      const createArg = innerTx.transaction.create.mock.calls[0][0];
+      expect(createArg.data.type).toBe('WITHDRAWAL');
+      const updateArg = innerTx.account.update.mock.calls[0][0];
+      expect(String(updateArg.data.balance)).toBe('800');
     });
 
     it('rejects when balance is insufficient', async () => {
-      queryRaw.mockResolvedValue([buildRow({ balance: new Decimal(50) })]);
+      innerTx.$queryRaw.mockResolvedValue([buildRow({ balance: new Decimal(50) })]);
       await expect(service.withdraw(ACCOUNT_ID, { value: 100 })).rejects.toBeInstanceOf(
         UnprocessableEntityException,
       );
     });
 
     it('rejects when daily withdrawal limit would be exceeded', async () => {
-      queryRaw.mockResolvedValue([buildRow()]);
-      repository.sumWithdrawalsInRange.mockResolvedValue(new Decimal(400) as never);
+      innerTx.$queryRaw.mockResolvedValue([buildRow()]);
+      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(400) } });
       await expect(service.withdraw(ACCOUNT_ID, { value: 150 })).rejects.toBeInstanceOf(
         UnprocessableEntityException,
       );
     });
 
     it('allows a withdrawal that exactly hits the daily limit', async () => {
-      queryRaw.mockResolvedValue([buildRow()]);
-      repository.sumWithdrawalsInRange.mockResolvedValue(new Decimal(400) as never);
+      innerTx.$queryRaw.mockResolvedValue([buildRow()]);
+      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(400) } });
+      innerTx.account.update.mockResolvedValue({});
       const created = buildTx({ type: 'WITHDRAWAL' });
-      recordMock.mockResolvedValue({ transaction: created, account: {} });
+      innerTx.transaction.create.mockResolvedValue(created);
 
       await expect(service.withdraw(ACCOUNT_ID, { value: 100 })).resolves.toBe(created);
     });
@@ -138,17 +145,13 @@ describe('TransactionsService', () => {
 
   describe('getStatement', () => {
     it('throws when the account does not exist', async () => {
-      (service as unknown as { db: { account: { findUnique: jest.Mock } } }).db.account.findUnique.mockResolvedValue(
-        null,
-      );
+      db.account.findUnique.mockResolvedValue(null);
       await expect(service.getStatement(ACCOUNT_ID, {})).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('returns a statement with deposit/withdrawal totals and net amount', async () => {
-      (service as unknown as { db: { account: { findUnique: jest.Mock } } }).db.account.findUnique.mockResolvedValue({
-        accountId: ACCOUNT_ID,
-      });
-      repository.findStatement.mockResolvedValue([
+      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
+      db.transaction.findMany.mockResolvedValue([
         buildTx({ type: 'DEPOSIT', value: new Decimal(300) as unknown as Transaction['value'] }),
         buildTx({ type: 'WITHDRAWAL', value: new Decimal(120) as unknown as Transaction['value'] }),
       ]);

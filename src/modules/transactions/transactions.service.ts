@@ -14,14 +14,10 @@ import {
   StatementResponseDto,
   TransactionResponseDto,
 } from './dto/transaction.dto';
-import { TransactionsRepository } from './transactions.repository';
 
 @Injectable()
 export class TransactionsService {
-  constructor(
-    private readonly db: DatabaseService,
-    private readonly repository: TransactionsRepository,
-  ) {}
+  constructor(private readonly db: DatabaseService) {}
 
   deposit(accountId: string, dto: CreateTransactionDto): Promise<Transaction> {
     return this.process(accountId, dto, 'DEPOSIT');
@@ -46,7 +42,20 @@ export class TransactionsService {
       throw new NotFoundException(`Account ${accountId} not found`);
     }
 
-    const transactions = await this.repository.findStatement(accountId, from, to);
+    const transactions = await this.db.transaction.findMany({
+      where: {
+        accountId,
+        ...(from || to
+          ? {
+              transactionDate: {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: { transactionDate: 'asc' },
+    });
 
     const totals = transactions.reduce(
       (acc, tx) => {
@@ -117,12 +126,15 @@ export class TransactionsService {
           const endOfDay = new Date();
           endOfDay.setUTCHours(23, 59, 59, 999);
 
-          const alreadyWithdrawn = await this.repository.sumWithdrawalsInRange(
-            tx,
-            accountId,
-            startOfDay,
-            endOfDay,
-          );
+          const sumResult = await tx.transaction.aggregate({
+            where: {
+              accountId,
+              type: 'WITHDRAWAL',
+              transactionDate: { gte: startOfDay, lte: endOfDay },
+            },
+            _sum: { value: true },
+          });
+          const alreadyWithdrawn = sumResult._sum.value ?? new Prisma.Decimal(0);
           const projectedTotal = toMoney(alreadyWithdrawn.toString()).plus(value);
           if (projectedTotal.gt(limit)) {
             throw new UnprocessableEntityException(
@@ -134,13 +146,13 @@ export class TransactionsService {
         const newBalance =
           type === 'DEPOSIT' ? currentBalance.plus(value) : currentBalance.minus(value);
 
-        const result = await this.repository.record(tx, {
-          accountId,
-          value,
-          type,
-          newBalance: new Prisma.Decimal(newBalance.toString()),
+        await tx.account.update({
+          where: { accountId },
+          data: { balance: new Prisma.Decimal(newBalance.toString()) },
         });
-        return result.transaction;
+        return tx.transaction.create({
+          data: { accountId, value, type },
+        });
       },
       { isolationLevel: 'Serializable' },
     );
