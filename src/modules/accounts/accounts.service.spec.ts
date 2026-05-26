@@ -2,7 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Decimal } from 'decimal.js';
 import { Account } from '../../generated/prisma/client';
-import { AccountsRepository } from './accounts.repository';
+import { DatabaseService } from '../../database/database.service';
 import { AccountsService } from './accounts.service';
 
 const buildAccount = (overrides: Partial<Account> = {}): Account => ({
@@ -16,53 +16,59 @@ const buildAccount = (overrides: Partial<Account> = {}): Account => ({
   ...overrides,
 });
 
+type AccountDelegateMock = {
+  create: jest.Mock;
+  findUnique: jest.Mock;
+  findMany: jest.Mock;
+  update: jest.Mock;
+};
+
 describe('AccountsService', () => {
   let service: AccountsService;
-  let repository: jest.Mocked<AccountsRepository>;
+  let account: AccountDelegateMock;
 
   beforeEach(async () => {
-    const repoMock: Partial<jest.Mocked<AccountsRepository>> = {
+    account = {
       create: jest.fn(),
-      findById: jest.fn(),
-      findByPersonId: jest.fn(),
-      findByPersonAndType: jest.fn(),
-      updateLimit: jest.fn(),
-      setActiveFlag: jest.fn(),
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
     };
 
     const module = await Test.createTestingModule({
       providers: [
         AccountsService,
-        { provide: AccountsRepository, useValue: repoMock },
+        { provide: DatabaseService, useValue: { account } },
       ],
     }).compile();
 
     service = module.get(AccountsService);
-    repository = module.get(AccountsRepository);
   });
 
   describe('create', () => {
     it('persists an account with normalized money values', async () => {
-      const account = buildAccount();
-      repository.create.mockResolvedValue(account);
+      const created = buildAccount();
+      account.findUnique.mockResolvedValue(null);
+      account.create.mockResolvedValue(created);
 
       await service.create({
-        personId: account.personId,
+        personId: created.personId,
         accountType: 1,
         dailyWithdrawalLimit: 1000.005,
         initialBalance: 50,
       });
 
-      expect(repository.create).toHaveBeenCalledTimes(1);
-      const arg = repository.create.mock.calls[0][0];
-      expect(arg.personId).toBe(account.personId);
-      expect(arg.accountType).toBe(1);
-      expect(String(arg.dailyWithdrawalLimit)).toBe('1000.01');
-      expect(String(arg.balance)).toBe('50');
+      expect(account.create).toHaveBeenCalledTimes(1);
+      const { data } = account.create.mock.calls[0][0];
+      expect(data.personId).toBe(created.personId);
+      expect(data.accountType).toBe(1);
+      expect(String(data.dailyWithdrawalLimit)).toBe('1000.01');
+      expect(String(data.balance)).toBe('50');
     });
 
     it('defaults initial balance to 0', async () => {
-      repository.create.mockResolvedValue(buildAccount());
+      account.findUnique.mockResolvedValue(null);
+      account.create.mockResolvedValue(buildAccount());
 
       await service.create({
         personId: '12345678901234567890',
@@ -70,58 +76,63 @@ describe('AccountsService', () => {
         dailyWithdrawalLimit: 500,
       });
 
-      const arg = repository.create.mock.calls[0][0];
-      expect(String(arg.balance)).toBe('0');
+      const { data } = account.create.mock.calls[0][0];
+      expect(String(data.balance)).toBe('0');
     });
 
     it('throws ConflictException when the person already has that account type', async () => {
-      const existing = buildAccount();
-      repository.findByPersonAndType.mockResolvedValue(existing);
+      account.findUnique.mockResolvedValue(buildAccount());
 
       await expect(
         service.create({
-          personId: existing.personId,
+          personId: '12345678901234567890',
           accountType: 1,
           dailyWithdrawalLimit: 500,
         }),
       ).rejects.toBeInstanceOf(ConflictException);
 
-      expect(repository.create).not.toHaveBeenCalled();
+      expect(account.create).not.toHaveBeenCalled();
     });
   });
 
   describe('getById', () => {
     it('returns the account when found', async () => {
-      const account = buildAccount();
-      repository.findById.mockResolvedValue(account);
+      const found = buildAccount();
+      account.findUnique.mockResolvedValue(found);
 
-      await expect(service.getById(account.accountId)).resolves.toBe(account);
+      await expect(service.getById(found.accountId)).resolves.toBe(found);
     });
 
     it('throws NotFoundException when missing', async () => {
-      repository.findById.mockResolvedValue(null);
+      account.findUnique.mockResolvedValue(null);
       await expect(service.getById('missing')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
   describe('block / activate', () => {
     it('blocks an existing account', async () => {
-      const account = buildAccount();
-      repository.findById.mockResolvedValue(account);
-      repository.setActiveFlag.mockResolvedValue({ ...account, activeFlag: false });
+      const found = buildAccount();
+      account.findUnique.mockResolvedValue(found);
+      account.update.mockResolvedValue({ ...found, activeFlag: false });
 
-      const result = await service.block(account.accountId);
-      expect(repository.setActiveFlag).toHaveBeenCalledWith(account.accountId, false);
+      const result = await service.block(found.accountId);
+      expect(account.update).toHaveBeenCalledWith({
+        where: { accountId: found.accountId },
+        data: { activeFlag: false },
+      });
       expect(result.activeFlag).toBe(false);
     });
 
     it('activates an existing account', async () => {
-      const account = buildAccount({ activeFlag: false });
-      repository.findById.mockResolvedValue(account);
-      repository.setActiveFlag.mockResolvedValue({ ...account, activeFlag: true });
+      const found = buildAccount({ activeFlag: false });
+      account.findUnique.mockResolvedValue(found);
+      account.update.mockResolvedValue({ ...found, activeFlag: true });
 
-      const result = await service.activate(account.accountId);
-      expect(repository.setActiveFlag).toHaveBeenCalledWith(account.accountId, true);
+      const result = await service.activate(found.accountId);
+      expect(account.update).toHaveBeenCalledWith({
+        where: { accountId: found.accountId },
+        data: { activeFlag: true },
+      });
       expect(result.activeFlag).toBe(true);
     });
   });

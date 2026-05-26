@@ -6,34 +6,40 @@ import {
 import { Account } from '../../generated/prisma/client';
 import { ACCOUNT_TYPE_NAME } from '../../common/constants';
 import { toMoney } from '../../common/money';
-import { AccountsRepository } from './accounts.repository';
+import { DatabaseService } from '../../database/database.service';
 import { CreateAccountDto, UpdateLimitDto } from './dto/account.dto';
 
 @Injectable()
 export class AccountsService {
-  constructor(private readonly repository: AccountsRepository) {}
+  constructor(private readonly db: DatabaseService) {}
 
   async create(dto: CreateAccountDto): Promise<Account> {
-    const existing = await this.repository.findByPersonAndType(
-      dto.personId,
-      dto.accountType,
-    );
+    const existing = await this.db.account.findUnique({
+      where: {
+        personId_accountType: {
+          personId: dto.personId,
+          accountType: dto.accountType,
+        },
+      },
+    });
     if (existing) {
       throw new ConflictException(
         `Person ${dto.personId} already has a ${ACCOUNT_TYPE_NAME[dto.accountType]} account`,
       );
     }
 
-    return this.repository.create({
-      personId: dto.personId,
-      accountType: dto.accountType,
-      dailyWithdrawalLimit: toMoney(dto.dailyWithdrawalLimit),
-      balance: toMoney(dto.initialBalance ?? 0),
+    return this.db.account.create({
+      data: {
+        personId: dto.personId,
+        accountType: dto.accountType,
+        dailyWithdrawalLimit: toMoney(dto.dailyWithdrawalLimit),
+        balance: toMoney(dto.initialBalance ?? 0),
+      },
     });
   }
 
   async getById(accountId: string): Promise<Account> {
-    const account = await this.repository.findById(accountId);
+    const account = await this.db.account.findUnique({ where: { accountId } });
     if (!account) {
       throw new NotFoundException(`Account ${accountId} not found`);
     }
@@ -41,21 +47,33 @@ export class AccountsService {
   }
 
   async listByPerson(personId: string): Promise<Account[]> {
-    return this.repository.findByPersonId(personId);
+    return this.db.account.findMany({
+      where: { personId },
+      orderBy: { createDate: 'desc' },
+    });
   }
 
   async updateLimit(accountId: string, dto: UpdateLimitDto): Promise<Account> {
     await this.getById(accountId);
-    return this.repository.updateLimit(accountId, toMoney(dto.dailyWithdrawalLimit));
+    return this.db.account.update({
+      where: { accountId },
+      data: { dailyWithdrawalLimit: toMoney(dto.dailyWithdrawalLimit) },
+    });
   }
 
   async block(accountId: string): Promise<Account> {
     await this.getById(accountId);
-    return this.repository.setActiveFlag(accountId, false);
+    return this.db.account.update({
+      where: { accountId },
+      data: { activeFlag: false },
+    });
   }
 
   async activate(accountId: string): Promise<Account> {
     await this.getById(accountId);
-    return this.repository.setActiveFlag(accountId, true);
+    return this.db.account.update({
+      where: { accountId },
+      data: { activeFlag: true },
+    });
   }
 }
