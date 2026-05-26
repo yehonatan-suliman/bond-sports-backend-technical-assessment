@@ -20,7 +20,7 @@ enum TransactionType {
 
 model Account {
   accountId            String   @id @default(uuid()) @db.Uuid
-  personId             String   @db.Uuid
+  personId             String
   balance              Decimal  @default(0) @db.Decimal(18, 2)
   dailyWithdrawalLimit Decimal  @db.Decimal(18, 2)
   activeFlag           Boolean  @default(true)
@@ -29,6 +29,7 @@ model Account {
 
   transactions Transaction[]
 
+  @@unique([personId, accountType])
   @@index([personId])
   @@map("accounts")
 }

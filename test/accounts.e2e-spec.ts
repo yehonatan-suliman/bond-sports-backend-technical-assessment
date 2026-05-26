@@ -2,14 +2,18 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types';
-import { randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
+
+const randomPersonId = (): string =>
+  Date.now().toString() + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
 
 describe('Accounts & Transactions (e2e)', () => {
   let app: INestApplication<App>;
   let db: DatabaseService;
-  const personId = randomUUID();
+  const personId = randomPersonId();
+  const blockedPersonId = randomPersonId();
+  const personIds = [personId, blockedPersonId];
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
@@ -23,8 +27,10 @@ describe('Accounts & Transactions (e2e)', () => {
   });
 
   afterAll(async () => {
-    await db.transaction.deleteMany({ where: { account: { personId } } });
-    await db.account.deleteMany({ where: { personId } });
+    await db.transaction.deleteMany({
+      where: { account: { personId: { in: personIds } } },
+    });
+    await db.account.deleteMany({ where: { personId: { in: personIds } } });
     await app.close();
   });
 
@@ -90,11 +96,18 @@ describe('Accounts & Transactions (e2e)', () => {
       .expect(422);
   });
 
+  it('rejects creating a second account of the same type for the same person', async () => {
+    await request(app.getHttpServer())
+      .post('/accounts')
+      .send({ personId, accountType: 1, dailyWithdrawalLimit: 500 })
+      .expect(409);
+  });
+
   it('rejects transactions on a blocked account', async () => {
     const create = await request(app.getHttpServer())
       .post('/accounts')
       .send({
-        personId,
+        personId: blockedPersonId,
         accountType: 1,
         dailyWithdrawalLimit: 500,
         initialBalance: 100,
@@ -114,7 +127,7 @@ describe('Accounts & Transactions (e2e)', () => {
   it('rejects invalid input with 400', async () => {
     await request(app.getHttpServer())
       .post('/accounts')
-      .send({ personId: 'not-a-uuid', accountType: 9, dailyWithdrawalLimit: -5 })
+      .send({ personId: 'not-digits', accountType: 9, dailyWithdrawalLimit: -5 })
       .expect(400);
   });
 });

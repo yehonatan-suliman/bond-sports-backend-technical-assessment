@@ -1,5 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Account } from '../../generated/prisma/client';
+import { ACCOUNT_TYPE_NAME } from '../../common/constants';
 import { toMoney } from '../../common/money';
 import { AccountsRepository } from './accounts.repository';
 import { CreateAccountDto, UpdateLimitDto } from './dto/account.dto';
@@ -9,6 +14,16 @@ export class AccountsService {
   constructor(private readonly repository: AccountsRepository) {}
 
   async create(dto: CreateAccountDto): Promise<Account> {
+    const existing = await this.repository.findByPersonAndType(
+      dto.personId,
+      dto.accountType,
+    );
+    if (existing) {
+      throw new ConflictException(
+        `Person ${dto.personId} already has a ${ACCOUNT_TYPE_NAME[dto.accountType]} account`,
+      );
+    }
+
     return this.repository.create({
       personId: dto.personId,
       accountType: dto.accountType,

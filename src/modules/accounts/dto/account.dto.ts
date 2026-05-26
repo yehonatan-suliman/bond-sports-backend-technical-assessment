@@ -1,22 +1,30 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import type { Account } from '../../../generated/prisma/client';
-import { ACCOUNT_TYPE_VALUES } from '../../../common/constants';
+import { ACCOUNT_TYPE, ACCOUNT_TYPE_NAME } from '../../../common/constants';
 import type { AccountTypeValue } from '../../../common/constants';
 import { moneyToString, toMoney } from '../../../common/money';
 
+export const personIdSchema = z
+  .string()
+  .regex(/^\d{1,20}$/, { error: 'personId must be 1-20 digits' });
+
+export const accountTypeNameSchema = z.enum(['CHECKING', 'SAVINGS']);
+
+export const accountTypeInputSchema = z
+  .union([accountTypeNameSchema, z.literal([1, 2])], {
+    error: "accountType must be 'CHECKING'/'SAVINGS' or 1/2",
+  })
+  .transform(
+    (value): AccountTypeValue =>
+      typeof value === 'string' ? ACCOUNT_TYPE[value] : value,
+  );
+
 export const createAccountSchema = z
   .object({
-    personId: z.string().uuid({ message: 'personId must be a valid UUID' }),
-    accountType: z
-      .number()
-      .int()
-      .refine(
-        (value): value is (typeof ACCOUNT_TYPE_VALUES)[number] =>
-          (ACCOUNT_TYPE_VALUES as readonly number[]).includes(value),
-        { message: 'accountType must be 1 (CHECKING) or 2 (SAVINGS)' },
-      ),
-    dailyWithdrawalLimit: z.number().positive().multipleOf(0.01),
+    personId: personIdSchema,
+    accountType: accountTypeInputSchema,
+    dailyWithdrawalLimit: z.number().positive().multipleOf(0.01).default(500),
     initialBalance: z.number().nonnegative().multipleOf(0.01).optional(),
   })
   .strict();
@@ -32,12 +40,12 @@ export const updateLimitSchema = z
 export class UpdateLimitDto extends createZodDto(updateLimitSchema) {}
 
 export const accountResponseSchema = z.object({
-  accountId: z.string().uuid(),
-  personId: z.string().uuid(),
+  accountId: z.uuid(),
+  personId: personIdSchema,
   balance: z.string(),
   dailyWithdrawalLimit: z.string(),
   activeFlag: z.boolean(),
-  accountType: z.number().int(),
+  accountType: accountTypeNameSchema,
   createDate: z.iso.datetime(),
 });
 
@@ -47,9 +55,11 @@ export class AccountResponseDto extends createZodDto(accountResponseSchema) {
       accountId: account.accountId,
       personId: account.personId,
       balance: moneyToString(toMoney(account.balance.toString())),
-      dailyWithdrawalLimit: moneyToString(toMoney(account.dailyWithdrawalLimit.toString())),
+      dailyWithdrawalLimit: moneyToString(
+        toMoney(account.dailyWithdrawalLimit.toString()),
+      ),
       activeFlag: account.activeFlag,
-      accountType: account.accountType as AccountTypeValue,
+      accountType: ACCOUNT_TYPE_NAME[account.accountType as AccountTypeValue],
       createDate: account.createDate.toISOString(),
     };
   }

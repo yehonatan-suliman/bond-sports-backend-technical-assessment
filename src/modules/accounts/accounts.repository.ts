@@ -21,7 +21,19 @@ export class AccountsRepository {
     });
   }
 
-  updateLimit(accountId: string, dailyWithdrawalLimit: Prisma.Decimal): Promise<Account> {
+  findByPersonAndType(
+    personId: string,
+    accountType: number,
+  ): Promise<Account | null> {
+    return this.db.account.findUnique({
+      where: { personId_accountType: { personId, accountType } },
+    });
+  }
+
+  updateLimit(
+    accountId: string,
+    dailyWithdrawalLimit: Prisma.Decimal,
+  ): Promise<Account> {
     return this.db.account.update({
       where: { accountId },
       data: { dailyWithdrawalLimit },

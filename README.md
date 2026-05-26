@@ -133,14 +133,14 @@ All endpoints are mounted under `/accounts`. The full spec is in Swagger; quick 
 curl -X POST http://localhost:3000/accounts \
   -H 'Content-Type: application/json' \
   -d '{
-    "personId": "00000000-0000-0000-0000-000000000001",
+    "personId": "123456789",
     "accountType": 1,
     "dailyWithdrawalLimit": 500,
     "initialBalance": 1000
   }'
 ```
 
-`accountType`: `1` = Checking, `2` = Savings.
+`accountType`: request accepts `"CHECKING"`/`"SAVINGS"` or `1`/`2`; responses always return the name (`"CHECKING"` or `"SAVINGS"`).
 
 ### Example: statement with period
 

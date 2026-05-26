@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Decimal } from 'decimal.js';
 import { Account } from '../../generated/prisma/client';
@@ -7,7 +7,7 @@ import { AccountsService } from './accounts.service';
 
 const buildAccount = (overrides: Partial<Account> = {}): Account => ({
   accountId: '11111111-1111-1111-1111-111111111111',
-  personId: '22222222-2222-2222-2222-222222222222',
+  personId: '12345678901234567890',
   balance: new Decimal(0) as unknown as Account['balance'],
   dailyWithdrawalLimit: new Decimal(1000) as unknown as Account['dailyWithdrawalLimit'],
   activeFlag: true,
@@ -25,6 +25,7 @@ describe('AccountsService', () => {
       create: jest.fn(),
       findById: jest.fn(),
       findByPersonId: jest.fn(),
+      findByPersonAndType: jest.fn(),
       updateLimit: jest.fn(),
       setActiveFlag: jest.fn(),
     };
@@ -64,13 +65,28 @@ describe('AccountsService', () => {
       repository.create.mockResolvedValue(buildAccount());
 
       await service.create({
-        personId: '22222222-2222-2222-2222-222222222222',
+        personId: '12345678901234567890',
         accountType: 2,
         dailyWithdrawalLimit: 500,
       });
 
       const arg = repository.create.mock.calls[0][0];
       expect(String(arg.balance)).toBe('0');
+    });
+
+    it('throws ConflictException when the person already has that account type', async () => {
+      const existing = buildAccount();
+      repository.findByPersonAndType.mockResolvedValue(existing);
+
+      await expect(
+        service.create({
+          personId: existing.personId,
+          accountType: 1,
+          dailyWithdrawalLimit: 500,
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(repository.create).not.toHaveBeenCalled();
     });
   });
 

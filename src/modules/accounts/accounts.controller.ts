@@ -11,8 +11,13 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ParsePersonIdPipe } from '../../common/pipes/parse-person-id.pipe';
 import { AccountsService } from './accounts.service';
-import { AccountResponseDto, CreateAccountDto, UpdateLimitDto } from './dto/account.dto';
+import {
+  AccountResponseDto,
+  CreateAccountDto,
+  UpdateLimitDto,
+} from './dto/account.dto';
 
 @ApiTags('accounts')
 @Controller('accounts')
@@ -29,7 +34,7 @@ export class AccountsController {
   @Get()
   @ApiOperation({ summary: 'List all accounts for a person' })
   async listByPerson(
-    @Query('personId', new ParseUUIDPipe()) personId: string,
+    @Query('personId', new ParsePersonIdPipe()) personId: string,
   ): Promise<AccountResponseDto[]> {
     const accounts = await this.service.listByPerson(personId);
     return accounts.map(AccountResponseDto.from);

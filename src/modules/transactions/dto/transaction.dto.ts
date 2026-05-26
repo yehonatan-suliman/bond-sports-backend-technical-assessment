@@ -21,8 +21,8 @@ export const statementQuerySchema = z
 export class StatementQueryDto extends createZodDto(statementQuerySchema) {}
 
 export const transactionResponseSchema = z.object({
-  transactionId: z.string().uuid(),
-  accountId: z.string().uuid(),
+  transactionId: z.uuid(),
+  accountId: z.uuid(),
   value: z.string(),
   type: z.enum(['DEPOSIT', 'WITHDRAWAL']),
   transactionDate: z.iso.datetime(),
@@ -41,7 +41,7 @@ export class TransactionResponseDto extends createZodDto(transactionResponseSche
 }
 
 export const statementResponseSchema = z.object({
-  accountId: z.string().uuid(),
+  accountId: z.uuid(),
   from: z.iso.datetime().nullable(),
   to: z.iso.datetime().nullable(),
   transactions: z.array(transactionResponseSchema),
