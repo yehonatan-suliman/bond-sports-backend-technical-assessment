@@ -63,7 +63,7 @@ describe('Accounts & Transactions (e2e)', () => {
     expect(get.body.balance).toBe('850.00');
 
     const statement = await request(app.getHttpServer())
-      .get(`/accounts/${accountId}/statement`)
+      .get(`/transactions?accountId=${accountId}`)
       .expect(200);
 
     expect(statement.body.transactions).toHaveLength(2);

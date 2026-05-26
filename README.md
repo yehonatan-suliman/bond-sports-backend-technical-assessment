@@ -125,7 +125,7 @@ All endpoints are mounted under `/accounts`. The full spec is in Swagger; quick 
 | `PATCH` | `/accounts/:accountId/activate` | Reactivate a blocked account |
 | `POST` | `/accounts/:accountId/deposits` | Deposit money |
 | `POST` | `/accounts/:accountId/withdrawals` | Withdraw money |
-| `GET` | `/accounts/:accountId/statement?from=…&to=…` | Statement filtered by period |
+| `GET` | `/transactions?…` | Search transactions by optional filters (`accountId`, `type`, `value`/`minValue`/`maxValue`, `from`/`to`). Response includes the matching list plus `totalDeposits`, `totalWithdrawals`, `netAmount`. |
 
 ### Example: create an account
 
@@ -142,13 +142,17 @@ curl -X POST http://localhost:3000/accounts \
 
 `accountType`: request accepts `"CHECKING"`/`"SAVINGS"` or `1`/`2`; responses always return the name (`"CHECKING"` or `"SAVINGS"`).
 
-### Example: statement with period
+**Withdrawal rules:**
+- **CHECKING** accounts may go negative (overdraft is allowed). The daily withdrawal limit still applies.
+- **SAVINGS** accounts cannot go negative — a withdrawal exceeding the balance is rejected with `422 Savings account balance cannot go negative`.
+
+### Example: search transactions
 
 ```bash
-curl "http://localhost:3000/accounts/$ID/statement?from=2026-05-01T00:00:00Z&to=2026-05-31T23:59:59Z"
+curl "http://localhost:3000/transactions?accountId=$ID&type=WITHDRAWAL&minValue=100&from=2026-05-01T00:00:00Z&to=2026-05-31T23:59:59Z"
 ```
 
-Response includes the list of transactions plus `totalDeposits`, `totalWithdrawals`, and `netAmount`.
+All filters are optional. Response includes the matching transaction list plus `totalDeposits`, `totalWithdrawals`, and `netAmount` over the filtered set.
 
 ## Error Handling
 

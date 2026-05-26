@@ -10,18 +10,18 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   CreateTransactionDto,
-  StatementQueryDto,
+  SearchTransactionsDto,
   StatementResponseDto,
   TransactionResponseDto,
 } from './dto/transaction.dto';
 import { TransactionsService } from './transactions.service';
 
 @ApiTags('transactions')
-@Controller('accounts/:accountId')
+@Controller('transactions')
 export class TransactionsController {
   constructor(private readonly service: TransactionsService) {}
 
-  @Post('deposits')
+  @Post(':accountId/deposits')
   @ApiOperation({ summary: 'Deposit money into an account' })
   async deposit(
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
@@ -31,7 +31,7 @@ export class TransactionsController {
     return TransactionResponseDto.from(tx);
   }
 
-  @Post('withdrawals')
+  @Post(':accountId/withdrawals')
   @ApiOperation({ summary: 'Withdraw money from an account' })
   async withdraw(
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
@@ -41,12 +41,14 @@ export class TransactionsController {
     return TransactionResponseDto.from(tx);
   }
 
-  @Get('statement')
-  @ApiOperation({ summary: 'Get account statement filtered by period' })
-  getStatement(
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
-    @Query() query: StatementQueryDto,
+  @Get()
+  @ApiOperation({
+    summary:
+      'Search transactions by optional filters (accountId, type, value/min/max, from/to). Returns matching list plus totals.',
+  })
+  search(
+    @Query() filters: SearchTransactionsDto,
   ): Promise<StatementResponseDto> {
-    return this.service.getStatement(accountId, query);
+    return this.service.search(filters);
   }
 }

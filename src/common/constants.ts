@@ -14,3 +14,5 @@ export const ACCOUNT_TYPE_NAME: Record<AccountTypeValue, AccountTypeName> = {
 };
 
 export const MONEY_DECIMAL_PLACES = 2;
+
+export const MAX_MONEY = 9_999_999_999_999.99;

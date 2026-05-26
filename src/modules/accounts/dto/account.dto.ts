@@ -1,7 +1,11 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import type { Account } from '../../../generated/prisma/client';
-import { ACCOUNT_TYPE, ACCOUNT_TYPE_NAME } from '../../../common/constants';
+import {
+  ACCOUNT_TYPE,
+  ACCOUNT_TYPE_NAME,
+  MAX_MONEY,
+} from '../../../common/constants';
 import type { AccountTypeValue } from '../../../common/constants';
 import { moneyToString, toMoney } from '../../../common/money';
 
@@ -24,8 +28,18 @@ export const createAccountSchema = z
   .object({
     personId: personIdSchema,
     accountType: accountTypeInputSchema,
-    dailyWithdrawalLimit: z.number().positive().multipleOf(0.01).default(500),
-    initialBalance: z.number().nonnegative().multipleOf(0.01).default(0),
+    dailyWithdrawalLimit: z
+      .number()
+      .positive()
+      .multipleOf(0.01)
+      .max(MAX_MONEY)
+      .default(500),
+    initialBalance: z
+      .number()
+      .nonnegative()
+      .multipleOf(0.01)
+      .max(MAX_MONEY)
+      .default(0),
   })
   .strict();
 
@@ -33,7 +47,7 @@ export class CreateAccountDto extends createZodDto(createAccountSchema) {}
 
 export const updateLimitSchema = z
   .object({
-    dailyWithdrawalLimit: z.number().positive().multipleOf(0.01),
+    dailyWithdrawalLimit: z.number().positive().multipleOf(0.01).max(MAX_MONEY),
   })
   .strict();
 
@@ -52,7 +66,11 @@ const booleanQuerySchema = z
   .enum(['true', 'false'])
   .transform((value) => value === 'true');
 
-const moneyQuerySchema = z.coerce.number().nonnegative().multipleOf(0.01);
+const moneyQuerySchema = z.coerce
+  .number()
+  .nonnegative()
+  .multipleOf(0.01)
+  .max(MAX_MONEY);
 
 export const searchAccountsSchema = z
   .object({

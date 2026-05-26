@@ -15,6 +15,7 @@ interface AccountRow {
   balance: Decimal;
   daily_withdrawal_limit: Decimal;
   active_flag: boolean;
+  account_type: number;
 }
 
 const ACCOUNT_ID = '11111111-1111-1111-1111-111111111111';
@@ -24,6 +25,7 @@ const buildRow = (overrides: Partial<AccountRow> = {}): AccountRow => ({
   balance: new Decimal(1000),
   daily_withdrawal_limit: new Decimal(500),
   active_flag: true,
+  account_type: 2,
   ...overrides,
 });
 
@@ -117,11 +119,27 @@ describe('TransactionsService', () => {
       expect(String(updateArg.data.balance)).toBe('800');
     });
 
-    it('rejects when balance is insufficient', async () => {
-      innerTx.$queryRaw.mockResolvedValue([buildRow({ balance: new Decimal(50) })]);
+    it('rejects when SAVINGS balance is insufficient', async () => {
+      innerTx.$queryRaw.mockResolvedValue([
+        buildRow({ balance: new Decimal(50), account_type: 2 }),
+      ]);
       await expect(service.withdraw(ACCOUNT_ID, { value: 100 })).rejects.toBeInstanceOf(
         UnprocessableEntityException,
       );
+    });
+
+    it('allows CHECKING overdraft past zero balance', async () => {
+      innerTx.$queryRaw.mockResolvedValue([
+        buildRow({ balance: new Decimal(50), account_type: 1 }),
+      ]);
+      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(0) } });
+      innerTx.account.update.mockResolvedValue({});
+      const created = buildTx({ type: 'WITHDRAWAL', value: new Decimal(100) as unknown as Transaction['value'] });
+      innerTx.transaction.create.mockResolvedValue(created);
+
+      await expect(service.withdraw(ACCOUNT_ID, { value: 100 })).resolves.toBe(created);
+      const updateArg = innerTx.account.update.mock.calls[0][0];
+      expect(String(updateArg.data.balance)).toBe('-50');
     });
 
     it('rejects when daily withdrawal limit would be exceeded', async () => {
@@ -143,20 +161,22 @@ describe('TransactionsService', () => {
     });
   });
 
-  describe('getStatement', () => {
-    it('throws when the account does not exist', async () => {
+  describe('search', () => {
+    it('throws when the accountId filter points to a missing account', async () => {
       db.account.findUnique.mockResolvedValue(null);
-      await expect(service.getStatement(ACCOUNT_ID, {})).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.search({ accountId: ACCOUNT_ID }),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('returns a statement with deposit/withdrawal totals and net amount', async () => {
+    it('returns matching transactions with deposit/withdrawal totals and net amount', async () => {
       db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
       db.transaction.findMany.mockResolvedValue([
         buildTx({ type: 'DEPOSIT', value: new Decimal(300) as unknown as Transaction['value'] }),
         buildTx({ type: 'WITHDRAWAL', value: new Decimal(120) as unknown as Transaction['value'] }),
       ]);
 
-      const statement = await service.getStatement(ACCOUNT_ID, {});
+      const statement = await service.search({ accountId: ACCOUNT_ID });
 
       expect(statement.totalDeposits).toBe('300.00');
       expect(statement.totalWithdrawals).toBe('120.00');
@@ -167,7 +187,7 @@ describe('TransactionsService', () => {
     it('rejects an inverted date range', async () => {
       const from = '2026-05-10T00:00:00.000Z';
       const to = '2026-05-01T00:00:00.000Z';
-      await expect(service.getStatement(ACCOUNT_ID, { from, to })).rejects.toBeInstanceOf(
+      await expect(service.search({ from, to })).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
