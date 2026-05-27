@@ -49,7 +49,7 @@ describe('AccountsService', () => {
   });
 
   describe('create', () => {
-    it('persists an account with normalized money values', async () => {
+    it('persists an account without setting balance (Prisma default handles it)', async () => {
       const created = buildAccount();
       account.findUnique.mockResolvedValue(null);
       account.create.mockResolvedValue(created);
@@ -58,7 +58,6 @@ describe('AccountsService', () => {
         personId: created.personId,
         accountType: 1,
         dailyWithdrawalLimit: toMoney(1000.005),
-        initialBalance: toMoney(50),
       });
 
       expect(account.create).toHaveBeenCalledTimes(1);
@@ -66,7 +65,7 @@ describe('AccountsService', () => {
       expect(data.personId).toBe(created.personId);
       expect(data.accountType).toBe(1);
       expect(String(data.dailyWithdrawalLimit)).toBe('1000.01');
-      expect(String(data.balance)).toBe('50');
+      expect(data.balance).toBeUndefined();
     });
 
     it('throws ConflictException when the person already has that account type', async () => {
@@ -77,7 +76,6 @@ describe('AccountsService', () => {
           personId: '12345678901234567890',
           accountType: 1,
           dailyWithdrawalLimit: toMoney(500),
-          initialBalance: toMoney(0),
         }),
       ).rejects.toBeInstanceOf(ConflictException);
 
@@ -126,6 +124,124 @@ describe('AccountsService', () => {
         data: { activeFlag: true },
       });
       expect(result.activeFlag).toBe(true);
+    });
+  });
+
+  describe('search', () => {
+    beforeEach(() => {
+      account.findMany.mockResolvedValue([]);
+    });
+
+    const whereOf = () => account.findMany.mock.calls[0][0].where;
+
+    it('returns all accounts when no filters are provided', async () => {
+      await service.search({});
+      expect(whereOf()).toEqual({});
+      expect(account.findMany.mock.calls[0][0].orderBy).toEqual({
+        createDate: 'desc',
+      });
+    });
+
+    it('filters by accountId', async () => {
+      await service.search({ accountId: '11111111-1111-1111-1111-111111111111' });
+      expect(whereOf()).toEqual({
+        accountId: '11111111-1111-1111-1111-111111111111',
+      });
+    });
+
+    it('filters by personId', async () => {
+      await service.search({ personId: '12345678901234567890' });
+      expect(whereOf()).toEqual({ personId: '12345678901234567890' });
+    });
+
+    it('filters by accountType', async () => {
+      await service.search({ accountType: 2 });
+      expect(whereOf()).toEqual({ accountType: 2 });
+    });
+
+    it('filters by activeFlag', async () => {
+      await service.search({ activeFlag: false });
+      expect(whereOf()).toEqual({ activeFlag: false });
+    });
+
+    it('filters by balance equality', async () => {
+      await service.search({ balance: toMoney(500) });
+      const where = whereOf();
+      expect(String(where.balance)).toBe('500');
+    });
+
+    it('filters by minBalance only (>= floor)', async () => {
+      await service.search({ minBalance: toMoney(100) });
+      const where = whereOf();
+      expect(String(where.balance.gte)).toBe('100');
+      expect(where.balance.lte).toBeUndefined();
+    });
+
+    it('filters by maxBalance only (<= ceiling)', async () => {
+      await service.search({ maxBalance: toMoney(900) });
+      const where = whereOf();
+      expect(String(where.balance.lte)).toBe('900');
+      expect(where.balance.gte).toBeUndefined();
+    });
+
+    it('filters by both minBalance and maxBalance', async () => {
+      await service.search({
+        minBalance: toMoney(100),
+        maxBalance: toMoney(900),
+      });
+      const where = whereOf();
+      expect(String(where.balance.gte)).toBe('100');
+      expect(String(where.balance.lte)).toBe('900');
+    });
+
+    it('filters by dailyWithdrawalLimit range', async () => {
+      await service.search({
+        minDailyWithdrawalLimit: toMoney(100),
+        maxDailyWithdrawalLimit: toMoney(500),
+      });
+      const where = whereOf();
+      expect(String(where.dailyWithdrawalLimit.gte)).toBe('100');
+      expect(String(where.dailyWithdrawalLimit.lte)).toBe('500');
+    });
+
+    it('mixes multiple filters into a single where clause', async () => {
+      await service.search({
+        accountType: 1,
+        activeFlag: true,
+        minBalance: toMoney(50),
+      });
+      const where = whereOf();
+      expect(where.accountType).toBe(1);
+      expect(where.activeFlag).toBe(true);
+      expect(String(where.balance.gte)).toBe('50');
+    });
+  });
+
+  describe('updateLimit', () => {
+    it('updates the daily limit on an existing account', async () => {
+      const found = buildAccount();
+      account.findUnique.mockResolvedValue(found);
+      account.update.mockResolvedValue({
+        ...found,
+        dailyWithdrawalLimit: toMoney(750) as unknown as Account['dailyWithdrawalLimit'],
+      });
+
+      await service.updateLimit(found.accountId, {
+        dailyWithdrawalLimit: toMoney(750),
+      });
+
+      expect(account.update).toHaveBeenCalledWith({
+        where: { accountId: found.accountId },
+        data: { dailyWithdrawalLimit: toMoney(750) },
+      });
+    });
+
+    it('throws NotFoundException when the account is missing', async () => {
+      account.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateLimit('missing', { dailyWithdrawalLimit: toMoney(750) }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(account.update).not.toHaveBeenCalled();
     });
   });
 });

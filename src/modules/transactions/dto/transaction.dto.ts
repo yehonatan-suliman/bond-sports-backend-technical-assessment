@@ -73,8 +73,6 @@ export const statementResponseSchema = z.object({
   transactions: z.array(transactionResponseSchema),
   totalDeposits: z.string(),
   totalWithdrawals: z.string(),
-  openingBalance: z.string(),
-  closingBalance: z.string(),
 });
 
 export class StatementResponseDto extends createZodDto(

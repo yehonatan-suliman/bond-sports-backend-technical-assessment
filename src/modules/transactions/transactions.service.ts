@@ -96,12 +96,7 @@ export class TransactionsService {
       );
     }
 
-    const [preGroups, periodGroups, listed] = await Promise.all([
-      this.db.transaction.groupBy({
-        by: ['type'],
-        where: { accountId, transactionDate: { lt: from } },
-        _sum: { value: true },
-      }),
+    const [periodGroups, listed] = await Promise.all([
       this.db.transaction.groupBy({
         by: ['type'],
         where: { accountId, transactionDate: { gte: from, lte: to } },
@@ -117,25 +112,15 @@ export class TransactionsService {
       }),
     ]);
 
-    const pre = this.sumByType(preGroups);
     const period = this.sumByType(periodGroups);
-
-    const openingBalance = pre.DEPOSIT.minus(pre.WITHDRAWAL);
-    const totalDeposits = period.DEPOSIT;
-    const totalWithdrawals = period.WITHDRAWAL;
-    const closingBalance = openingBalance
-      .plus(totalDeposits)
-      .minus(totalWithdrawals);
 
     return {
       accountId,
       from: from.toISOString(),
       to: to.toISOString(),
       transactions: listed.map(TransactionResponseDto.from),
-      totalDeposits: moneyToString(totalDeposits),
-      totalWithdrawals: moneyToString(totalWithdrawals),
-      openingBalance: moneyToString(openingBalance),
-      closingBalance: moneyToString(closingBalance),
+      totalDeposits: moneyToString(period.DEPOSIT),
+      totalWithdrawals: moneyToString(period.WITHDRAWAL),
     };
   }
 

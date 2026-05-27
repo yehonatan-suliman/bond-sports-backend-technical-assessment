@@ -37,7 +37,6 @@ export class AccountsService {
         personId: dto.personId,
         accountType: dto.accountType,
         dailyWithdrawalLimit: dto.dailyWithdrawalLimit,
-        balance: dto.initialBalance,
       },
     });
   }

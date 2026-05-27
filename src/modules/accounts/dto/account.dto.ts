@@ -9,7 +9,6 @@ import type { AccountTypeValue } from '../../../models/accountType.typs';
 import {
   moneyToString,
   nonNegativeMoneyQuerySchema,
-  nonNegativeMoneySchema,
   positiveMoneySchema,
   toMoney,
 } from '../../../util/moneyCalc.util';
@@ -34,7 +33,6 @@ export const createAccountSchema = z
     personId: personIdSchema,
     accountType: accountTypeInputSchema,
     dailyWithdrawalLimit: positiveMoneySchema.default(toMoney(500)),
-    initialBalance: nonNegativeMoneySchema.default(toMoney(0)),
   })
   .strict();
 

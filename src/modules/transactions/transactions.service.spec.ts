@@ -230,19 +230,14 @@ describe('TransactionsService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('computes opening, totals and closing across a period', async () => {
+    it('computes deposit/withdrawal totals over a period', async () => {
       db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
       const from = '2026-05-01T00:00:00.000Z';
       const to = '2026-05-31T23:59:59.999Z';
-      db.transaction.groupBy
-        .mockResolvedValueOnce([
-          { type: 'DEPOSIT', _sum: { value: new Decimal(500) } },
-          { type: 'WITHDRAWAL', _sum: { value: new Decimal(200) } },
-        ])
-        .mockResolvedValueOnce([
-          { type: 'DEPOSIT', _sum: { value: new Decimal(150) } },
-          { type: 'WITHDRAWAL', _sum: { value: new Decimal(100) } },
-        ]);
+      db.transaction.groupBy.mockResolvedValueOnce([
+        { type: 'DEPOSIT', _sum: { value: new Decimal(150) } },
+        { type: 'WITHDRAWAL', _sum: { value: new Decimal(100) } },
+      ]);
       db.transaction.findMany.mockResolvedValue([
         buildTx({
           type: 'DEPOSIT',
@@ -258,11 +253,11 @@ describe('TransactionsService', () => {
 
       const statement = await service.getStatement(ACCOUNT_ID, { from, to });
 
-      expect(statement.openingBalance).toBe('300.00');
       expect(statement.totalDeposits).toBe('150.00');
       expect(statement.totalWithdrawals).toBe('100.00');
-      expect(statement.closingBalance).toBe('350.00');
       expect(statement.transactions).toHaveLength(2);
+      expect(statement).not.toHaveProperty('openingBalance');
+      expect(statement).not.toHaveProperty('closingBalance');
     });
 
     it('defaults `from` to 30 days before `to` when omitted', async () => {
@@ -284,12 +279,10 @@ describe('TransactionsService', () => {
       db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
       const from = '2026-05-01T00:00:00.000Z';
       const to = '2026-05-31T23:59:59.999Z';
-      db.transaction.groupBy
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { type: 'DEPOSIT', _sum: { value: new Decimal(150) } },
-          { type: 'WITHDRAWAL', _sum: { value: new Decimal(100) } },
-        ]);
+      db.transaction.groupBy.mockResolvedValueOnce([
+        { type: 'DEPOSIT', _sum: { value: new Decimal(150) } },
+        { type: 'WITHDRAWAL', _sum: { value: new Decimal(100) } },
+      ]);
       db.transaction.findMany.mockResolvedValue([
         buildTx({
           type: 'DEPOSIT',

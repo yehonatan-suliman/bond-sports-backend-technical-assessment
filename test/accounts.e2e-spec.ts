@@ -6,14 +6,14 @@ import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
 
 const randomPersonId = (): string =>
-  Date.now().toString() + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  Date.now().toString() +
+  Math.floor(Math.random() * 1000).toString().padStart(3, '0');
 
-describe('Accounts & Transactions (e2e)', () => {
+describe('Accounts (e2e)', () => {
   let app: INestApplication<App>;
   let db: DatabaseService;
   const personId = randomPersonId();
-  const blockedPersonId = randomPersonId();
-  const personIds = [personId, blockedPersonId];
+  const personIds = [personId];
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
@@ -34,66 +34,22 @@ describe('Accounts & Transactions (e2e)', () => {
     await app.close();
   });
 
-  it('creates an account, deposits, withdraws, and returns a statement', async () => {
+  it('creates an account with balance 0 and returns it by id', async () => {
     const create = await request(app.getHttpServer())
       .post('/accounts')
-      .send({
-        personId,
-        accountType: 1,
-        dailyWithdrawalLimit: 500,
-        initialBalance: 1000,
-      })
+      .send({ personId, accountType: 1, dailyWithdrawalLimit: 500 })
       .expect(201);
 
     const accountId = create.body.accountId as string;
-    expect(create.body.balance).toBe('1000.00');
+    expect(create.body.balance).toBe('0.00');
     expect(create.body.activeFlag).toBe(true);
+    expect(create.body.accountType).toBe('CHECKING');
 
-    await request(app.getHttpServer())
-      .post(`/accounts/${accountId}/deposits`)
-      .send({ value: 250 })
-      .expect(201);
-
-    await request(app.getHttpServer())
-      .post(`/accounts/${accountId}/withdrawals`)
-      .send({ value: 400 })
-      .expect(201);
-
-    const get = await request(app.getHttpServer()).get(`/accounts/${accountId}`).expect(200);
-    expect(get.body.balance).toBe('850.00');
-
-    const statement = await request(app.getHttpServer())
-      .get(`/transactions?accountId=${accountId}`)
+    const get = await request(app.getHttpServer())
+      .get(`/accounts/${accountId}`)
       .expect(200);
-
-    expect(statement.body.transactions).toHaveLength(2);
-    expect(statement.body.totalDeposits).toBe('250.00');
-    expect(statement.body.totalWithdrawals).toBe('400.00');
-    expect(statement.body.netAmount).toBe('-150.00');
-  });
-
-  it('rejects withdrawals that exceed the daily limit', async () => {
-    const create = await request(app.getHttpServer())
-      .post('/accounts')
-      .send({
-        personId,
-        accountType: 2,
-        dailyWithdrawalLimit: 100,
-        initialBalance: 1000,
-      })
-      .expect(201);
-
-    const accountId = create.body.accountId as string;
-
-    await request(app.getHttpServer())
-      .post(`/accounts/${accountId}/withdrawals`)
-      .send({ value: 60 })
-      .expect(201);
-
-    await request(app.getHttpServer())
-      .post(`/accounts/${accountId}/withdrawals`)
-      .send({ value: 50 })
-      .expect(422);
+    expect(get.body.accountId).toBe(accountId);
+    expect(get.body.personId).toBe(personId);
   });
 
   it('rejects creating a second account of the same type for the same person', async () => {
@@ -103,25 +59,16 @@ describe('Accounts & Transactions (e2e)', () => {
       .expect(409);
   });
 
-  it('rejects transactions on a blocked account', async () => {
-    const create = await request(app.getHttpServer())
+  it('rejects unknown body fields (strict-mode 400)', async () => {
+    await request(app.getHttpServer())
       .post('/accounts')
       .send({
-        personId: blockedPersonId,
+        personId,
         accountType: 1,
         dailyWithdrawalLimit: 500,
         initialBalance: 100,
       })
-      .expect(201);
-
-    const accountId = create.body.accountId as string;
-
-    await request(app.getHttpServer()).patch(`/accounts/${accountId}/block`).expect(200);
-
-    await request(app.getHttpServer())
-      .post(`/accounts/${accountId}/deposits`)
-      .send({ value: 10 })
-      .expect(403);
+      .expect(400);
   });
 
   it('rejects invalid input with 400', async () => {

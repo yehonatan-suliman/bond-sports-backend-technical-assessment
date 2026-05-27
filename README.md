@@ -136,10 +136,11 @@ curl -X POST http://localhost:3000/accounts \
   -d '{
     "personId": "123456789",
     "accountType": 1,
-    "dailyWithdrawalLimit": 500,
-    "initialBalance": 1000
+    "dailyWithdrawalLimit": 500
   }'
 ```
+
+Accounts always start with a balance of `0.00`. Use the deposit endpoint to fund them.
 
 `accountType`: request accepts `"CHECKING"`/`"SAVINGS"` or `1`/`2`; responses always return the name (`"CHECKING"` or `"SAVINGS"`).
 
