@@ -13,17 +13,16 @@ import {
 } from '../../generated/prisma/client';
 import { ACCOUNT_TYPE } from '../../models/accountType.typs';
 import { DatabaseService } from '../../database/database.service';
-import {
-  moneyToString,
-  toDecimalFilter,
-  toMoney,
-} from '../../util/moneyCalc.util';
+import { moneyToString, toDecimalFilter } from '../../util/moneyCalc.util';
 import {
   CreateTransactionDto,
   SearchTransactionsDto,
+  StatementQueryDto,
   StatementResponseDto,
   TransactionResponseDto,
 } from './dto/transaction.dto';
+
+const STATEMENT_DEFAULT_WINDOW_DAYS = 30;
 
 interface LockedAccount {
   account_id: string;
@@ -45,22 +44,13 @@ export class TransactionsService {
     return this.processTransaction(accountId, dto, 'WITHDRAWAL');
   }
 
-  async search(filters: SearchTransactionsDto): Promise<StatementResponseDto> {
+  async search(filters: SearchTransactionsDto): Promise<Transaction[]> {
     const from = filters.from ? new Date(filters.from) : undefined;
     const to = filters.to ? new Date(filters.to) : undefined;
     if (from && to && from > to) {
       throw new BadRequestException(
         '`from` must be earlier than or equal to `to`',
       );
-    }
-
-    if (filters.accountId) {
-      const account = await this.db.account.findUnique({
-        where: { accountId: filters.accountId },
-      });
-      if (!account) {
-        throw new NotFoundException(`Account ${filters.accountId} not found`);
-      }
     }
 
     const value = toDecimalFilter(
@@ -83,33 +73,92 @@ export class TransactionsService {
         : {}),
     };
 
-    const transactions = await this.db.transaction.findMany({
+    return this.db.transaction.findMany({
       where,
       orderBy: { transactionDate: 'asc' },
     });
+  }
 
-    const totals = transactions.reduce(
-      (acc, tx) => {
-        const v = toMoney(tx.value.toString());
-        return tx.type === 'DEPOSIT'
-          ? { deposits: acc.deposits.plus(v), withdrawals: acc.withdrawals }
-          : {
-              deposits: acc.deposits,
-              withdrawals: acc.withdrawals.plus(v),
-            };
-      },
-      { deposits: toMoney(0), withdrawals: toMoney(0) },
-    );
+  async getStatement(
+    accountId: string,
+    query: StatementQueryDto,
+  ): Promise<StatementResponseDto> {
+    const account = await this.db.account.findUnique({ where: { accountId } });
+    if (!account) {
+      throw new NotFoundException(`Account ${accountId} not found`);
+    }
+
+    const to = query.to ? new Date(query.to) : new Date();
+    const from = query.from ? new Date(query.from) : this.daysBefore(to, STATEMENT_DEFAULT_WINDOW_DAYS);
+    if (from > to) {
+      throw new BadRequestException(
+        '`from` must be earlier than or equal to `to`',
+      );
+    }
+
+    const [preGroups, periodGroups, listed] = await Promise.all([
+      this.db.transaction.groupBy({
+        by: ['type'],
+        where: { accountId, transactionDate: { lt: from } },
+        _sum: { value: true },
+      }),
+      this.db.transaction.groupBy({
+        by: ['type'],
+        where: { accountId, transactionDate: { gte: from, lte: to } },
+        _sum: { value: true },
+      }),
+      this.db.transaction.findMany({
+        where: {
+          accountId,
+          transactionDate: { gte: from, lte: to },
+          ...(query.type ? { type: query.type } : {}),
+        },
+        orderBy: { transactionDate: 'asc' },
+      }),
+    ]);
+
+    const pre = this.sumByType(preGroups);
+    const period = this.sumByType(periodGroups);
+
+    const openingBalance = pre.DEPOSIT.minus(pre.WITHDRAWAL);
+    const totalDeposits = period.DEPOSIT;
+    const totalWithdrawals = period.WITHDRAWAL;
+    const closingBalance = openingBalance
+      .plus(totalDeposits)
+      .minus(totalWithdrawals);
 
     return {
-      accountId: filters.accountId ?? null,
-      from: from ? from.toISOString() : null,
-      to: to ? to.toISOString() : null,
-      transactions: transactions.map(TransactionResponseDto.from),
-      totalDeposits: moneyToString(totals.deposits),
-      totalWithdrawals: moneyToString(totals.withdrawals),
-      netAmount: moneyToString(totals.deposits.minus(totals.withdrawals)),
+      accountId,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      transactions: listed.map(TransactionResponseDto.from),
+      totalDeposits: moneyToString(totalDeposits),
+      totalWithdrawals: moneyToString(totalWithdrawals),
+      openingBalance: moneyToString(openingBalance),
+      closingBalance: moneyToString(closingBalance),
     };
+  }
+
+  private sumByType(
+    groups: {
+      type: TransactionType;
+      _sum: { value: Prisma.Decimal | null };
+    }[],
+  ): Record<TransactionType, Prisma.Decimal> {
+    const map: Record<TransactionType, Prisma.Decimal> = {
+      DEPOSIT: new Prisma.Decimal(0),
+      WITHDRAWAL: new Prisma.Decimal(0),
+    };
+    for (const g of groups) {
+      if (g._sum.value) map[g.type] = g._sum.value;
+    }
+    return map;
+  }
+
+  private daysBefore(reference: Date, days: number): Date {
+    const result = new Date(reference);
+    result.setUTCDate(result.getUTCDate() - days);
+    return result;
   }
 
   private async processTransaction(

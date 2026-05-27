@@ -11,6 +11,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   CreateTransactionDto,
   SearchTransactionsDto,
+  StatementQueryDto,
   StatementResponseDto,
   TransactionResponseDto,
 } from './dto/transaction.dto';
@@ -44,11 +45,24 @@ export class TransactionsController {
   @Get()
   @ApiOperation({
     summary:
-      'Search transactions by optional filters (accountId, type, value/min/max, from/to). Returns matching list plus totals.',
+      'Search transactions by optional filters (accountId, type, value/min/max, from/to). Returns the matching list.',
   })
-  search(
+  async search(
     @Query() filters: SearchTransactionsDto,
+  ): Promise<TransactionResponseDto[]> {
+    const transactions = await this.service.search(filters);
+    return transactions.map(TransactionResponseDto.from);
+  }
+
+  @Get(':accountId/statement')
+  @ApiOperation({
+    summary:
+      'Account statement for a period (default: last 30 days). Optional `type` filters the list; totals and balances always reflect the full period.',
+  })
+  getStatement(
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Query() query: StatementQueryDto,
   ): Promise<StatementResponseDto> {
-    return this.service.search(filters);
+    return this.service.getStatement(accountId, query);
   }
 }

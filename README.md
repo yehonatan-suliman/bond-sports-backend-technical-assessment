@@ -125,7 +125,8 @@ All endpoints are mounted under `/accounts`. The full spec is in Swagger; quick 
 | `PATCH` | `/accounts/:accountId/activate` | Reactivate a blocked account |
 | `POST` | `/accounts/:accountId/deposits` | Deposit money |
 | `POST` | `/accounts/:accountId/withdrawals` | Withdraw money |
-| `GET` | `/transactions?…` | Search transactions by optional filters (`accountId`, `type`, `value`/`minValue`/`maxValue`, `from`/`to`). Response includes the matching list plus `totalDeposits`, `totalWithdrawals`, `netAmount`. |
+| `GET` | `/transactions?…` | Search transactions by optional filters (`accountId`, `type`, `value`/`minValue`/`maxValue`, `from`/`to`). Returns the matching list of transactions. |
+| `GET` | `/transactions/:accountId/statement?from=…&to=…&type=…` | Account statement for a period (defaults to the last 30 days). Optional `type` filters the listed transactions. Response includes the list plus `openingBalance`, `closingBalance`, `totalDeposits`, `totalWithdrawals`. |
 
 ### Example: create an account
 
@@ -152,7 +153,31 @@ curl -X POST http://localhost:3000/accounts \
 curl "http://localhost:3000/transactions?accountId=$ID&type=WITHDRAWAL&minValue=100&from=2026-05-01T00:00:00Z&to=2026-05-31T23:59:59Z"
 ```
 
-All filters are optional. Response includes the matching transaction list plus `totalDeposits`, `totalWithdrawals`, and `netAmount` over the filtered set.
+All filters are optional. Returns just the matching transaction list (no totals — use the statement endpoint for those).
+
+### Example: account statement (defaults to the last 30 days)
+
+```bash
+curl "http://localhost:3000/transactions/$ID/statement"
+curl "http://localhost:3000/transactions/$ID/statement?from=2026-05-01T00:00:00Z&to=2026-05-31T23:59:59Z&type=WITHDRAWAL"
+```
+
+Response shape:
+
+```json
+{
+  "accountId": "…",
+  "from": "2026-05-01T00:00:00.000Z",
+  "to": "2026-05-31T23:59:59.999Z",
+  "transactions": [ … ],
+  "totalDeposits": "150.00",
+  "totalWithdrawals": "100.00",
+  "openingBalance": "300.00",
+  "closingBalance": "350.00"
+}
+```
+
+`openingBalance` is the balance at the start of the period, `closingBalance` at the end. Totals and balances always reflect the full period; the optional `type` filter only narrows the listed `transactions` array.
 
 ## Error Handling
 

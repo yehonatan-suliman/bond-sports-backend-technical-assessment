@@ -50,7 +50,7 @@ describe('TransactionsService', () => {
   let innerTx: InnerTx;
   let db: {
     account: { findUnique: jest.Mock };
-    transaction: { findMany: jest.Mock };
+    transaction: { findMany: jest.Mock; groupBy: jest.Mock };
     $transaction: jest.Mock;
   };
 
@@ -63,7 +63,7 @@ describe('TransactionsService', () => {
 
     db = {
       account: { findUnique: jest.fn() },
-      transaction: { findMany: jest.fn() },
+      transaction: { findMany: jest.fn(), groupBy: jest.fn() },
       $transaction: jest.fn(async (fn: (tx: InnerTx) => unknown) =>
         fn(innerTx),
       ),
@@ -194,16 +194,8 @@ describe('TransactionsService', () => {
   });
 
   describe('search', () => {
-    it('throws when the accountId filter points to a missing account', async () => {
-      db.account.findUnique.mockResolvedValue(null);
-      await expect(
-        service.search({ accountId: ACCOUNT_ID }),
-      ).rejects.toBeInstanceOf(NotFoundException);
-    });
-
-    it('returns matching transactions with deposit/withdrawal totals and net amount', async () => {
-      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
-      db.transaction.findMany.mockResolvedValue([
+    it('returns the matching transaction rows from the DB', async () => {
+      const rows = [
         buildTx({
           type: 'DEPOSIT',
           value: new Decimal(300) as unknown as Transaction['value'],
@@ -212,14 +204,13 @@ describe('TransactionsService', () => {
           type: 'WITHDRAWAL',
           value: new Decimal(120) as unknown as Transaction['value'],
         }),
-      ]);
+      ];
+      db.transaction.findMany.mockResolvedValue(rows);
 
-      const statement = await service.search({ accountId: ACCOUNT_ID });
+      const result = await service.search({ accountId: ACCOUNT_ID });
 
-      expect(statement.totalDeposits).toBe('300.00');
-      expect(statement.totalWithdrawals).toBe('120.00');
-      expect(statement.netAmount).toBe('180.00');
-      expect(statement.transactions).toHaveLength(2);
+      expect(result).toBe(rows);
+      expect(result).toHaveLength(2);
     });
 
     it('rejects an inverted date range', async () => {
@@ -228,6 +219,104 @@ describe('TransactionsService', () => {
       await expect(service.search({ from, to })).rejects.toBeInstanceOf(
         BadRequestException,
       );
+    });
+  });
+
+  describe('getStatement', () => {
+    it('throws NotFoundException when the account does not exist', async () => {
+      db.account.findUnique.mockResolvedValue(null);
+      await expect(
+        service.getStatement(ACCOUNT_ID, {}),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('computes opening, totals and closing across a period', async () => {
+      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
+      const from = '2026-05-01T00:00:00.000Z';
+      const to = '2026-05-31T23:59:59.999Z';
+      db.transaction.groupBy
+        .mockResolvedValueOnce([
+          { type: 'DEPOSIT', _sum: { value: new Decimal(500) } },
+          { type: 'WITHDRAWAL', _sum: { value: new Decimal(200) } },
+        ])
+        .mockResolvedValueOnce([
+          { type: 'DEPOSIT', _sum: { value: new Decimal(150) } },
+          { type: 'WITHDRAWAL', _sum: { value: new Decimal(100) } },
+        ]);
+      db.transaction.findMany.mockResolvedValue([
+        buildTx({
+          type: 'DEPOSIT',
+          value: new Decimal(150) as unknown as Transaction['value'],
+          transactionDate: new Date('2026-05-05T00:00:00Z'),
+        }),
+        buildTx({
+          type: 'WITHDRAWAL',
+          value: new Decimal(100) as unknown as Transaction['value'],
+          transactionDate: new Date('2026-05-20T00:00:00Z'),
+        }),
+      ]);
+
+      const statement = await service.getStatement(ACCOUNT_ID, { from, to });
+
+      expect(statement.openingBalance).toBe('300.00');
+      expect(statement.totalDeposits).toBe('150.00');
+      expect(statement.totalWithdrawals).toBe('100.00');
+      expect(statement.closingBalance).toBe('350.00');
+      expect(statement.transactions).toHaveLength(2);
+    });
+
+    it('defaults `from` to 30 days before `to` when omitted', async () => {
+      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
+      db.transaction.groupBy.mockResolvedValue([]);
+      db.transaction.findMany.mockResolvedValue([]);
+      const to = '2026-05-31T00:00:00.000Z';
+
+      const statement = await service.getStatement(ACCOUNT_ID, { to });
+
+      const fromDate = new Date(statement.from);
+      const toDate = new Date(statement.to);
+      const diffDays =
+        (toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000);
+      expect(diffDays).toBe(30);
+    });
+
+    it('filters the listed transactions by type but keeps full-period totals', async () => {
+      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
+      const from = '2026-05-01T00:00:00.000Z';
+      const to = '2026-05-31T23:59:59.999Z';
+      db.transaction.groupBy
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { type: 'DEPOSIT', _sum: { value: new Decimal(150) } },
+          { type: 'WITHDRAWAL', _sum: { value: new Decimal(100) } },
+        ]);
+      db.transaction.findMany.mockResolvedValue([
+        buildTx({
+          type: 'DEPOSIT',
+          value: new Decimal(150) as unknown as Transaction['value'],
+          transactionDate: new Date('2026-05-05T00:00:00Z'),
+        }),
+      ]);
+
+      const statement = await service.getStatement(ACCOUNT_ID, {
+        from,
+        to,
+        type: 'DEPOSIT',
+      });
+
+      expect(statement.transactions).toHaveLength(1);
+      expect(statement.transactions[0].type).toBe('DEPOSIT');
+      expect(statement.totalDeposits).toBe('150.00');
+      expect(statement.totalWithdrawals).toBe('100.00');
+    });
+
+    it('rejects an inverted date range', async () => {
+      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
+      const from = '2026-05-10T00:00:00.000Z';
+      const to = '2026-05-01T00:00:00.000Z';
+      await expect(
+        service.getStatement(ACCOUNT_ID, { from, to }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

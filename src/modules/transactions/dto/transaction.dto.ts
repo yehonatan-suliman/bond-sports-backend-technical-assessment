@@ -56,14 +56,25 @@ export class TransactionResponseDto extends createZodDto(
   }
 }
 
+export const statementQuerySchema = z
+  .object({
+    from: z.iso.datetime().optional(),
+    to: z.iso.datetime().optional(),
+    type: z.enum(['DEPOSIT', 'WITHDRAWAL']).optional(),
+  })
+  .strict();
+
+export class StatementQueryDto extends createZodDto(statementQuerySchema) {}
+
 export const statementResponseSchema = z.object({
-  accountId: z.uuid().nullable(),
-  from: z.iso.datetime().nullable(),
-  to: z.iso.datetime().nullable(),
+  accountId: z.uuid(),
+  from: z.iso.datetime(),
+  to: z.iso.datetime(),
   transactions: z.array(transactionResponseSchema),
   totalDeposits: z.string(),
   totalWithdrawals: z.string(),
-  netAmount: z.string(),
+  openingBalance: z.string(),
+  closingBalance: z.string(),
 });
 
 export class StatementResponseDto extends createZodDto(
