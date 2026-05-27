@@ -27,7 +27,7 @@ export class TransactionsController {
   async deposit(
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
     @Body() dto: CreateTransactionDto,
-  ): Promise<TransactionResponseDto> {
+  ) {
     const tx = await this.service.deposit(accountId, dto);
     return TransactionResponseDto.from(tx);
   }
@@ -37,7 +37,7 @@ export class TransactionsController {
   async withdraw(
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
     @Body() dto: CreateTransactionDto,
-  ): Promise<TransactionResponseDto> {
+  ) {
     const tx = await this.service.withdraw(accountId, dto);
     return TransactionResponseDto.from(tx);
   }
@@ -47,9 +47,7 @@ export class TransactionsController {
     summary:
       'Search transactions by optional filters (accountId, type, value/min/max, from/to). Returns the matching list.',
   })
-  async search(
-    @Query() filters: SearchTransactionsDto,
-  ): Promise<TransactionResponseDto[]> {
+  async search(@Query() filters: SearchTransactionsDto) {
     const transactions = await this.service.search(filters);
     return transactions.map(TransactionResponseDto.from);
   }
@@ -62,7 +60,7 @@ export class TransactionsController {
   getStatement(
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
     @Query() query: StatementQueryDto,
-  ): Promise<StatementResponseDto> {
+  ) {
     return this.service.getStatement(accountId, query);
   }
 }

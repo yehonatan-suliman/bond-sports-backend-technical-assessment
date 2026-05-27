@@ -17,7 +17,7 @@ import {
 export class AccountsService {
   constructor(private readonly db: DatabaseService) {}
 
-  async create(dto: CreateAccountDto): Promise<Account> {
+  async create(dto: CreateAccountDto) {
     const existing = await this.db.account.findUnique({
       where: {
         personId_accountType: {
@@ -49,7 +49,7 @@ export class AccountsService {
     return account;
   }
 
-  async search(filters: SearchAccountsDto): Promise<Account[]> {
+  async search(filters: SearchAccountsDto) {
     const where: Prisma.AccountWhereInput = {
       ...(filters.accountId ? { accountId: filters.accountId } : {}),
       ...(filters.personId ? { personId: filters.personId } : {}),
@@ -81,7 +81,7 @@ export class AccountsService {
     });
   }
 
-  async updateLimit(accountId: string, dto: UpdateLimitDto): Promise<Account> {
+  async updateLimit(accountId: string, dto: UpdateLimitDto) {
     await this.getById(accountId);
     return this.db.account.update({
       where: { accountId },
@@ -89,7 +89,7 @@ export class AccountsService {
     });
   }
 
-  async block(accountId: string): Promise<Account> {
+  async block(accountId: string) {
     await this.getById(accountId);
     return this.db.account.update({
       where: { accountId },
@@ -97,7 +97,7 @@ export class AccountsService {
     });
   }
 
-  async activate(accountId: string): Promise<Account> {
+  async activate(accountId: string) {
     await this.getById(accountId);
     return this.db.account.update({
       where: { accountId },
