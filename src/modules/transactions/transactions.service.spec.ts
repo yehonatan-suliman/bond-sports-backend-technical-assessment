@@ -194,6 +194,12 @@ describe('TransactionsService', () => {
   });
 
   describe('search', () => {
+    beforeEach(() => {
+      db.transaction.findMany.mockResolvedValue([]);
+    });
+
+    const whereOf = () => db.transaction.findMany.mock.calls[0][0].where;
+
     it('returns the matching transaction rows from the DB', async () => {
       const rows = [
         buildTx({
@@ -211,6 +217,92 @@ describe('TransactionsService', () => {
 
       expect(result).toBe(rows);
       expect(result).toHaveLength(2);
+    });
+
+    it('builds an empty where clause when no filters are provided', async () => {
+      await service.search({});
+      expect(whereOf()).toEqual({});
+      expect(db.transaction.findMany.mock.calls[0][0].orderBy).toEqual({
+        transactionDate: 'asc',
+      });
+    });
+
+    it('filters by accountId', async () => {
+      await service.search({ accountId: ACCOUNT_ID });
+      expect(whereOf()).toEqual({ accountId: ACCOUNT_ID });
+    });
+
+    it('filters by type', async () => {
+      await service.search({ type: 'WITHDRAWAL' });
+      expect(whereOf()).toEqual({ type: 'WITHDRAWAL' });
+    });
+
+    it('filters by exact value', async () => {
+      await service.search({ value: toMoney(100) });
+      const where = whereOf();
+      expect(String(where.value)).toBe('100');
+    });
+
+    it('filters by minValue only', async () => {
+      await service.search({ minValue: toMoney(50) });
+      const where = whereOf();
+      expect(String(where.value.gte)).toBe('50');
+      expect(where.value.lte).toBeUndefined();
+    });
+
+    it('filters by maxValue only', async () => {
+      await service.search({ maxValue: toMoney(300) });
+      const where = whereOf();
+      expect(String(where.value.lte)).toBe('300');
+      expect(where.value.gte).toBeUndefined();
+    });
+
+    it('filters by both minValue and maxValue', async () => {
+      await service.search({ minValue: toMoney(50), maxValue: toMoney(300) });
+      const where = whereOf();
+      expect(String(where.value.gte)).toBe('50');
+      expect(String(where.value.lte)).toBe('300');
+    });
+
+    it('filters by from-date only', async () => {
+      const from = '2026-05-01T00:00:00.000Z';
+      await service.search({ from });
+      const where = whereOf();
+      expect(where.transactionDate.gte).toEqual(new Date(from));
+      expect(where.transactionDate.lte).toBeUndefined();
+    });
+
+    it('filters by to-date only', async () => {
+      const to = '2026-05-31T23:59:59.999Z';
+      await service.search({ to });
+      const where = whereOf();
+      expect(where.transactionDate.lte).toEqual(new Date(to));
+      expect(where.transactionDate.gte).toBeUndefined();
+    });
+
+    it('filters by both from and to', async () => {
+      const from = '2026-05-01T00:00:00.000Z';
+      const to = '2026-05-31T23:59:59.999Z';
+      await service.search({ from, to });
+      const where = whereOf();
+      expect(where.transactionDate.gte).toEqual(new Date(from));
+      expect(where.transactionDate.lte).toEqual(new Date(to));
+    });
+
+    it('combines accountId + type + value range + date range', async () => {
+      await service.search({
+        accountId: ACCOUNT_ID,
+        type: 'DEPOSIT',
+        minValue: toMoney(100),
+        from: '2026-05-01T00:00:00.000Z',
+      });
+      const where = whereOf();
+      expect(where.accountId).toBe(ACCOUNT_ID);
+      expect(where.type).toBe('DEPOSIT');
+      expect(String(where.value.gte)).toBe('100');
+      expect(where.transactionDate.gte).toEqual(
+        new Date('2026-05-01T00:00:00.000Z'),
+      );
     });
 
     it('rejects an inverted date range', async () => {
@@ -301,6 +393,77 @@ describe('TransactionsService', () => {
       expect(statement.transactions[0].type).toBe('DEPOSIT');
       expect(statement.totalDeposits).toBe('150.00');
       expect(statement.totalWithdrawals).toBe('100.00');
+    });
+
+    it('returns zero totals and empty list for a period with no activity', async () => {
+      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
+      db.transaction.groupBy.mockResolvedValue([]);
+      db.transaction.findMany.mockResolvedValue([]);
+
+      const statement = await service.getStatement(ACCOUNT_ID, {
+        from: '2026-05-01T00:00:00.000Z',
+        to: '2026-05-31T23:59:59.999Z',
+      });
+
+      expect(statement.totalDeposits).toBe('0.00');
+      expect(statement.totalWithdrawals).toBe('0.00');
+      expect(statement.transactions).toEqual([]);
+    });
+
+    it('handles deposits-only period', async () => {
+      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
+      db.transaction.groupBy.mockResolvedValueOnce([
+        { type: 'DEPOSIT', _sum: { value: new Decimal(420) } },
+      ]);
+      db.transaction.findMany.mockResolvedValue([]);
+
+      const statement = await service.getStatement(ACCOUNT_ID, {
+        from: '2026-05-01T00:00:00.000Z',
+        to: '2026-05-31T23:59:59.999Z',
+      });
+
+      expect(statement.totalDeposits).toBe('420.00');
+      expect(statement.totalWithdrawals).toBe('0.00');
+    });
+
+    it('handles withdrawals-only period', async () => {
+      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
+      db.transaction.groupBy.mockResolvedValueOnce([
+        { type: 'WITHDRAWAL', _sum: { value: new Decimal(75) } },
+      ]);
+      db.transaction.findMany.mockResolvedValue([]);
+
+      const statement = await service.getStatement(ACCOUNT_ID, {
+        from: '2026-05-01T00:00:00.000Z',
+        to: '2026-05-31T23:59:59.999Z',
+      });
+
+      expect(statement.totalDeposits).toBe('0.00');
+      expect(statement.totalWithdrawals).toBe('75.00');
+    });
+
+    it('passes the right where clauses to groupBy and findMany', async () => {
+      db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
+      db.transaction.groupBy.mockResolvedValue([]);
+      db.transaction.findMany.mockResolvedValue([]);
+      const from = '2026-05-01T00:00:00.000Z';
+      const to = '2026-05-31T23:59:59.999Z';
+
+      await service.getStatement(ACCOUNT_ID, { from, to, type: 'DEPOSIT' });
+
+      const groupByArg = db.transaction.groupBy.mock.calls[0][0];
+      expect(groupByArg.by).toEqual(['type']);
+      expect(groupByArg.where.accountId).toBe(ACCOUNT_ID);
+      expect(groupByArg.where.transactionDate.gte).toEqual(new Date(from));
+      expect(groupByArg.where.transactionDate.lte).toEqual(new Date(to));
+      expect(groupByArg.where.type).toBeUndefined();
+
+      const findManyArg = db.transaction.findMany.mock.calls[0][0];
+      expect(findManyArg.where.accountId).toBe(ACCOUNT_ID);
+      expect(findManyArg.where.type).toBe('DEPOSIT');
+      expect(findManyArg.where.transactionDate.gte).toEqual(new Date(from));
+      expect(findManyArg.where.transactionDate.lte).toEqual(new Date(to));
+      expect(findManyArg.orderBy).toEqual({ transactionDate: 'asc' });
     });
 
     it('rejects an inverted date range', async () => {
