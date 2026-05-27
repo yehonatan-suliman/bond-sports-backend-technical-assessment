@@ -8,7 +8,7 @@ import { Test } from '@nestjs/testing';
 import { Decimal } from 'decimal.js';
 import { DatabaseService } from '../../database/database.service';
 import { Transaction } from '../../generated/prisma/client';
-import { toMoney } from '../../util/moneyCalc.util';
+import { toMoney } from '../../util/calc.util';
 import { TransactionsService } from './transactions.service';
 
 interface AccountRow {
@@ -317,9 +317,9 @@ describe('TransactionsService', () => {
   describe('getStatement', () => {
     it('throws NotFoundException when the account does not exist', async () => {
       db.account.findUnique.mockResolvedValue(null);
-      await expect(
-        service.getStatement(ACCOUNT_ID, {}),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getStatement(ACCOUNT_ID, {})).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
     it('computes deposit/withdrawal totals over a period', async () => {

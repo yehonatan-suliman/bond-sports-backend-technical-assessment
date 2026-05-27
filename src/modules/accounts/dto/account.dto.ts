@@ -4,14 +4,14 @@ import type { Account } from '../../../generated/prisma/client';
 import {
   ACCOUNT_TYPE,
   ACCOUNT_TYPE_NAME,
-} from '../../../models/accountType.typs';
-import type { AccountTypeValue } from '../../../models/accountType.typs';
+} from '../../../models/accountType.model';
+import type { AccountTypeValue } from '../../../models/accountType.model';
+import { moneyToString, toMoney } from '../../../util/calc.util';
 import {
-  moneyToString,
+  MoneySchema,
   nonNegativeMoneyQuerySchema,
   positiveMoneySchema,
-  toMoney,
-} from '../../../util/moneyCalc.util';
+} from 'src/models/money.model';
 
 export const personIdSchema = z
   .string()
@@ -62,13 +62,12 @@ const booleanQuerySchema = z
 
 export const searchAccountsSchema = z
   .object({
-    accountId: z.uuid().optional(),
     personId: personIdSchema.optional(),
     accountType: accountTypeQuerySchema.optional(),
     activeFlag: booleanQuerySchema.optional(),
-    balance: positiveMoneySchema.optional(),
-    minBalance: positiveMoneySchema.optional(),
-    maxBalance: positiveMoneySchema.optional(),
+    balance: MoneySchema.optional(),
+    minBalance: MoneySchema.optional(),
+    maxBalance: MoneySchema.optional(),
     dailyWithdrawalLimit: nonNegativeMoneyQuerySchema.optional(),
     minDailyWithdrawalLimit: nonNegativeMoneyQuerySchema.optional(),
     maxDailyWithdrawalLimit: nonNegativeMoneyQuerySchema.optional(),

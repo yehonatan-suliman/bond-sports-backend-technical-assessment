@@ -1,12 +1,11 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import type { Transaction } from '../../../generated/prisma/client';
+import { moneyToString, toMoney } from '../../../util/calc.util';
 import {
-  moneyToString,
   nonNegativeMoneyQuerySchema,
   positiveMoneySchema,
-  toMoney,
-} from '../../../util/moneyCalc.util';
+} from 'src/models/money.model';
 
 export const createTransactionSchema = z
   .object({

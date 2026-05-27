@@ -1,7 +1,4 @@
 import { Decimal } from 'decimal.js';
-import { z } from 'zod';
-
-const MAX_MONEY = 9999999999999.99;
 
 const MONEY_DECIMAL_PLACES = 2;
 
@@ -30,24 +27,3 @@ export function toDecimalFilter(
     ...(max !== undefined ? { lte: max } : {}),
   };
 }
-
-export const positiveMoneySchema = z
-  .number()
-  .positive()
-  .multipleOf(0.01)
-  .max(MAX_MONEY)
-  .transform(toMoney);
-
-export const nonNegativeMoneySchema = z
-  .number()
-  .nonnegative()
-  .multipleOf(0.01)
-  .max(MAX_MONEY)
-  .transform(toMoney);
-
-export const nonNegativeMoneyQuerySchema = z.coerce
-  .number()
-  .nonnegative()
-  .multipleOf(0.01)
-  .max(MAX_MONEY)
-  .transform(toMoney);

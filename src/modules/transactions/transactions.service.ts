@@ -6,19 +6,14 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import {
-  Prisma,
-  Transaction,
-  TransactionType,
-} from '../../generated/prisma/client';
-import { ACCOUNT_TYPE } from '../../models/accountType.typs';
+import { Prisma, TransactionType } from '../../generated/prisma/client';
+import { ACCOUNT_TYPE } from '../../models/accountType.model';
 import { DatabaseService } from '../../database/database.service';
-import { moneyToString, toDecimalFilter } from '../../util/moneyCalc.util';
+import { moneyToString, toDecimalFilter } from '../../util/calc.util';
 import {
   CreateTransactionDto,
   SearchTransactionsDto,
   StatementQueryDto,
-  StatementResponseDto,
   TransactionResponseDto,
 } from './dto/transaction.dto';
 
@@ -47,11 +42,6 @@ export class TransactionsService {
   async search(filters: SearchTransactionsDto) {
     const from = filters.from ? new Date(filters.from) : undefined;
     const to = filters.to ? new Date(filters.to) : undefined;
-    if (from && to && from > to) {
-      throw new BadRequestException(
-        '`from` must be earlier than or equal to `to`',
-      );
-    }
 
     const value = toDecimalFilter(
       filters.value,
@@ -89,11 +79,6 @@ export class TransactionsService {
     const from = query.from
       ? new Date(query.from)
       : this.daysBefore(to, STATEMENT_DEFAULT_WINDOW_DAYS);
-    if (from > to) {
-      throw new BadRequestException(
-        '`from` must be earlier than or equal to `to`',
-      );
-    }
 
     const [periodGroups, listed] = await Promise.all([
       this.db.transaction.groupBy({
