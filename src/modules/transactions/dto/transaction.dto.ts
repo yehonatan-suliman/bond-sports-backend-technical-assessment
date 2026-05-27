@@ -1,30 +1,28 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import type { Transaction } from '../../../generated/prisma/client';
-import { MAX_MONEY } from '../../../common/constants';
-import { moneyToString, toMoney } from '../../../common/money';
+import {
+  moneyToString,
+  nonNegativeMoneyQuerySchema,
+  positiveMoneySchema,
+  toMoney,
+} from '../../../common/money';
 
 export const createTransactionSchema = z
   .object({
-    value: z.number().positive().multipleOf(0.01).max(MAX_MONEY),
+    value: positiveMoneySchema,
   })
   .strict();
 
 export class CreateTransactionDto extends createZodDto(createTransactionSchema) {}
 
-const moneyQuerySchema = z.coerce
-  .number()
-  .nonnegative()
-  .multipleOf(0.01)
-  .max(MAX_MONEY);
-
 export const searchTransactionsSchema = z
   .object({
     accountId: z.uuid().optional(),
     type: z.enum(['DEPOSIT', 'WITHDRAWAL']).optional(),
-    value: moneyQuerySchema.optional(),
-    minValue: moneyQuerySchema.optional(),
-    maxValue: moneyQuerySchema.optional(),
+    value: nonNegativeMoneyQuerySchema.optional(),
+    minValue: nonNegativeMoneyQuerySchema.optional(),
+    maxValue: nonNegativeMoneyQuerySchema.optional(),
     from: z.iso.datetime().optional(),
     to: z.iso.datetime().optional(),
   })

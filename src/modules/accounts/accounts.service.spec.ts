@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Decimal } from 'decimal.js';
 import { Account } from '../../generated/prisma/client';
+import { toMoney } from '../../common/money';
 import { DatabaseService } from '../../database/database.service';
 import { AccountsService } from './accounts.service';
 
@@ -54,8 +55,8 @@ describe('AccountsService', () => {
       await service.create({
         personId: created.personId,
         accountType: 1,
-        dailyWithdrawalLimit: 1000.005,
-        initialBalance: 50,
+        dailyWithdrawalLimit: toMoney(1000.005),
+        initialBalance: toMoney(50),
       });
 
       expect(account.create).toHaveBeenCalledTimes(1);
@@ -73,8 +74,8 @@ describe('AccountsService', () => {
         service.create({
           personId: '12345678901234567890',
           accountType: 1,
-          dailyWithdrawalLimit: 500,
-          initialBalance: 0,
+          dailyWithdrawalLimit: toMoney(500),
+          initialBalance: toMoney(0),
         }),
       ).rejects.toBeInstanceOf(ConflictException);
 

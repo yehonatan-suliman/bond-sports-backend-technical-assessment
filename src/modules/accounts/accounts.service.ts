@@ -3,9 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Decimal } from 'decimal.js';
 import { Account, Prisma } from '../../generated/prisma/client';
 import { ACCOUNT_TYPE_NAME } from '../../common/constants';
-import { toMoney } from '../../common/money';
 import { DatabaseService } from '../../database/database.service';
 import {
   CreateAccountDto,
@@ -36,8 +36,8 @@ export class AccountsService {
       data: {
         personId: dto.personId,
         accountType: dto.accountType,
-        dailyWithdrawalLimit: toMoney(dto.dailyWithdrawalLimit),
-        balance: toMoney(dto.initialBalance ?? 0),
+        dailyWithdrawalLimit: dto.dailyWithdrawalLimit,
+        balance: dto.initialBalance,
       },
     });
   }
@@ -83,15 +83,15 @@ export class AccountsService {
   }
 
   private toDecimalFilter(
-    eq?: number,
-    min?: number,
-    max?: number,
+    eq?: Decimal,
+    min?: Decimal,
+    max?: Decimal,
   ): Prisma.AccountWhereInput['balance'] {
-    if (eq !== undefined) return toMoney(eq);
+    if (eq !== undefined) return eq;
     if (min === undefined && max === undefined) return undefined;
     return {
-      ...(min !== undefined ? { gte: toMoney(min) } : {}),
-      ...(max !== undefined ? { lte: toMoney(max) } : {}),
+      ...(min !== undefined ? { gte: min } : {}),
+      ...(max !== undefined ? { lte: max } : {}),
     };
   }
 
@@ -99,7 +99,7 @@ export class AccountsService {
     await this.getById(accountId);
     return this.db.account.update({
       where: { accountId },
-      data: { dailyWithdrawalLimit: toMoney(dto.dailyWithdrawalLimit) },
+      data: { dailyWithdrawalLimit: dto.dailyWithdrawalLimit },
     });
   }
 

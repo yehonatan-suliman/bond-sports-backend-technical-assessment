@@ -8,6 +8,7 @@ import { Test } from '@nestjs/testing';
 import { Decimal } from 'decimal.js';
 import { DatabaseService } from '../../database/database.service';
 import { Transaction } from '../../generated/prisma/client';
+import { toMoney } from '../../common/money';
 import { TransactionsService } from './transactions.service';
 
 interface AccountRow {
@@ -83,7 +84,7 @@ describe('TransactionsService', () => {
       const created = buildTx({ value: new Decimal(250) as unknown as Transaction['value'] });
       innerTx.transaction.create.mockResolvedValue(created);
 
-      const result = await service.deposit(ACCOUNT_ID, { value: 250 });
+      const result = await service.deposit(ACCOUNT_ID, { value: toMoney(250) });
 
       expect(result).toBe(created);
       const createArg = innerTx.transaction.create.mock.calls[0][0];
@@ -94,11 +95,11 @@ describe('TransactionsService', () => {
 
     it('rejects deposits to blocked accounts', async () => {
       innerTx.$queryRaw.mockResolvedValue([buildRow({ active_flag: false })]);
-      await expect(service.deposit(ACCOUNT_ID, { value: 100 })).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.deposit(ACCOUNT_ID, { value: toMoney(100) })).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('rejects non-positive values', async () => {
-      await expect(service.deposit(ACCOUNT_ID, { value: 0 })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.deposit(ACCOUNT_ID, { value: toMoney(0) })).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
@@ -110,7 +111,7 @@ describe('TransactionsService', () => {
       const created = buildTx({ type: 'WITHDRAWAL', value: new Decimal(200) as unknown as Transaction['value'] });
       innerTx.transaction.create.mockResolvedValue(created);
 
-      const result = await service.withdraw(ACCOUNT_ID, { value: 200 });
+      const result = await service.withdraw(ACCOUNT_ID, { value: toMoney(200) });
 
       expect(result).toBe(created);
       const createArg = innerTx.transaction.create.mock.calls[0][0];
@@ -123,7 +124,8 @@ describe('TransactionsService', () => {
       innerTx.$queryRaw.mockResolvedValue([
         buildRow({ balance: new Decimal(50), account_type: 2 }),
       ]);
-      await expect(service.withdraw(ACCOUNT_ID, { value: 100 })).rejects.toBeInstanceOf(
+      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(0) } });
+      await expect(service.withdraw(ACCOUNT_ID, { value: toMoney(100) })).rejects.toBeInstanceOf(
         UnprocessableEntityException,
       );
     });
@@ -137,7 +139,7 @@ describe('TransactionsService', () => {
       const created = buildTx({ type: 'WITHDRAWAL', value: new Decimal(100) as unknown as Transaction['value'] });
       innerTx.transaction.create.mockResolvedValue(created);
 
-      await expect(service.withdraw(ACCOUNT_ID, { value: 100 })).resolves.toBe(created);
+      await expect(service.withdraw(ACCOUNT_ID, { value: toMoney(100) })).resolves.toBe(created);
       const updateArg = innerTx.account.update.mock.calls[0][0];
       expect(String(updateArg.data.balance)).toBe('-50');
     });
@@ -145,7 +147,7 @@ describe('TransactionsService', () => {
     it('rejects when daily withdrawal limit would be exceeded', async () => {
       innerTx.$queryRaw.mockResolvedValue([buildRow()]);
       innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(400) } });
-      await expect(service.withdraw(ACCOUNT_ID, { value: 150 })).rejects.toBeInstanceOf(
+      await expect(service.withdraw(ACCOUNT_ID, { value: toMoney(150) })).rejects.toBeInstanceOf(
         UnprocessableEntityException,
       );
     });
@@ -157,7 +159,7 @@ describe('TransactionsService', () => {
       const created = buildTx({ type: 'WITHDRAWAL' });
       innerTx.transaction.create.mockResolvedValue(created);
 
-      await expect(service.withdraw(ACCOUNT_ID, { value: 100 })).resolves.toBe(created);
+      await expect(service.withdraw(ACCOUNT_ID, { value: toMoney(100) })).resolves.toBe(created);
     });
   });
 
