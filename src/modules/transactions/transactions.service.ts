@@ -149,9 +149,9 @@ export class TransactionsService {
       DEPOSIT: new Prisma.Decimal(0),
       WITHDRAWAL: new Prisma.Decimal(0),
     };
-    for (const g of groups) {
+    groups.forEach((g) => {
       if (g._sum.value) map[g.type] = g._sum.value;
-    }
+    });
     return map;
   }
 
