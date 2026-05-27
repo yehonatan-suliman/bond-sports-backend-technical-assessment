@@ -3,9 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Decimal } from 'decimal.js';
 import { Account, Prisma } from '../../generated/prisma/client';
-import { ACCOUNT_TYPE_NAME } from '../../common/constants';
+import { ACCOUNT_TYPE_NAME } from '../../models/accountType.typs';
+import { toDecimalFilter } from '../../util/moneyCalc.util';
 import { DatabaseService } from '../../database/database.service';
 import {
   CreateAccountDto,
@@ -62,14 +62,14 @@ export class AccountsService {
         : {}),
     };
 
-    const balance = this.toDecimalFilter(
+    const balance = toDecimalFilter(
       filters.balance,
       filters.minBalance,
       filters.maxBalance,
     );
     if (balance !== undefined) where.balance = balance;
 
-    const limit = this.toDecimalFilter(
+    const limit = toDecimalFilter(
       filters.dailyWithdrawalLimit,
       filters.minDailyWithdrawalLimit,
       filters.maxDailyWithdrawalLimit,
@@ -80,19 +80,6 @@ export class AccountsService {
       where,
       orderBy: { createDate: 'desc' },
     });
-  }
-
-  private toDecimalFilter(
-    eq?: Decimal,
-    min?: Decimal,
-    max?: Decimal,
-  ): Prisma.AccountWhereInput['balance'] {
-    if (eq !== undefined) return eq;
-    if (min === undefined && max === undefined) return undefined;
-    return {
-      ...(min !== undefined ? { gte: min } : {}),
-      ...(max !== undefined ? { lte: max } : {}),
-    };
   }
 
   async updateLimit(accountId: string, dto: UpdateLimitDto): Promise<Account> {

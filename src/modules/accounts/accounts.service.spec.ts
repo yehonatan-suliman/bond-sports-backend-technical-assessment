@@ -2,7 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Decimal } from 'decimal.js';
 import { Account } from '../../generated/prisma/client';
-import { toMoney } from '../../common/money';
+import { toMoney } from '../../util/moneyCalc.util';
 import { DatabaseService } from '../../database/database.service';
 import { AccountsService } from './accounts.service';
 
@@ -10,7 +10,9 @@ const buildAccount = (overrides: Partial<Account> = {}): Account => ({
   accountId: '11111111-1111-1111-1111-111111111111',
   personId: '12345678901234567890',
   balance: new Decimal(0) as unknown as Account['balance'],
-  dailyWithdrawalLimit: new Decimal(1000) as unknown as Account['dailyWithdrawalLimit'],
+  dailyWithdrawalLimit: new Decimal(
+    1000,
+  ) as unknown as Account['dailyWithdrawalLimit'],
   activeFlag: true,
   accountType: 1,
   createDate: new Date('2026-01-01T00:00:00Z'),
@@ -93,7 +95,9 @@ describe('AccountsService', () => {
 
     it('throws NotFoundException when missing', async () => {
       account.findUnique.mockResolvedValue(null);
-      await expect(service.getById('missing')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getById('missing')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 

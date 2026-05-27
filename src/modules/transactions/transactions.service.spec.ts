@@ -8,7 +8,7 @@ import { Test } from '@nestjs/testing';
 import { Decimal } from 'decimal.js';
 import { DatabaseService } from '../../database/database.service';
 import { Transaction } from '../../generated/prisma/client';
-import { toMoney } from '../../common/money';
+import { toMoney } from '../../util/moneyCalc.util';
 import { TransactionsService } from './transactions.service';
 
 interface AccountRow {
@@ -64,7 +64,9 @@ describe('TransactionsService', () => {
     db = {
       account: { findUnique: jest.fn() },
       transaction: { findMany: jest.fn() },
-      $transaction: jest.fn(async (fn: (tx: InnerTx) => unknown) => fn(innerTx)),
+      $transaction: jest.fn(async (fn: (tx: InnerTx) => unknown) =>
+        fn(innerTx),
+      ),
     };
 
     const module = await Test.createTestingModule({
@@ -81,7 +83,9 @@ describe('TransactionsService', () => {
     it('credits the account and records the transaction', async () => {
       innerTx.$queryRaw.mockResolvedValue([buildRow()]);
       innerTx.account.update.mockResolvedValue({});
-      const created = buildTx({ value: new Decimal(250) as unknown as Transaction['value'] });
+      const created = buildTx({
+        value: new Decimal(250) as unknown as Transaction['value'],
+      });
       innerTx.transaction.create.mockResolvedValue(created);
 
       const result = await service.deposit(ACCOUNT_ID, { value: toMoney(250) });
@@ -95,23 +99,34 @@ describe('TransactionsService', () => {
 
     it('rejects deposits to blocked accounts', async () => {
       innerTx.$queryRaw.mockResolvedValue([buildRow({ active_flag: false })]);
-      await expect(service.deposit(ACCOUNT_ID, { value: toMoney(100) })).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(
+        service.deposit(ACCOUNT_ID, { value: toMoney(100) }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('rejects non-positive values', async () => {
-      await expect(service.deposit(ACCOUNT_ID, { value: toMoney(0) })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.deposit(ACCOUNT_ID, { value: toMoney(0) }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
   describe('withdraw', () => {
     it('debits the account when within balance and daily limit', async () => {
       innerTx.$queryRaw.mockResolvedValue([buildRow()]);
-      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(0) } });
+      innerTx.transaction.aggregate.mockResolvedValue({
+        _sum: { value: new Decimal(0) },
+      });
       innerTx.account.update.mockResolvedValue({});
-      const created = buildTx({ type: 'WITHDRAWAL', value: new Decimal(200) as unknown as Transaction['value'] });
+      const created = buildTx({
+        type: 'WITHDRAWAL',
+        value: new Decimal(200) as unknown as Transaction['value'],
+      });
       innerTx.transaction.create.mockResolvedValue(created);
 
-      const result = await service.withdraw(ACCOUNT_ID, { value: toMoney(200) });
+      const result = await service.withdraw(ACCOUNT_ID, {
+        value: toMoney(200),
+      });
 
       expect(result).toBe(created);
       const createArg = innerTx.transaction.create.mock.calls[0][0];
@@ -124,42 +139,57 @@ describe('TransactionsService', () => {
       innerTx.$queryRaw.mockResolvedValue([
         buildRow({ balance: new Decimal(50), account_type: 2 }),
       ]);
-      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(0) } });
-      await expect(service.withdraw(ACCOUNT_ID, { value: toMoney(100) })).rejects.toBeInstanceOf(
-        UnprocessableEntityException,
-      );
+      innerTx.transaction.aggregate.mockResolvedValue({
+        _sum: { value: new Decimal(0) },
+      });
+      await expect(
+        service.withdraw(ACCOUNT_ID, { value: toMoney(100) }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
     it('allows CHECKING overdraft past zero balance', async () => {
       innerTx.$queryRaw.mockResolvedValue([
         buildRow({ balance: new Decimal(50), account_type: 1 }),
       ]);
-      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(0) } });
+      innerTx.transaction.aggregate.mockResolvedValue({
+        _sum: { value: new Decimal(0) },
+      });
       innerTx.account.update.mockResolvedValue({});
-      const created = buildTx({ type: 'WITHDRAWAL', value: new Decimal(100) as unknown as Transaction['value'] });
+      const created = buildTx({
+        type: 'WITHDRAWAL',
+        value: new Decimal(100) as unknown as Transaction['value'],
+      });
       innerTx.transaction.create.mockResolvedValue(created);
 
-      await expect(service.withdraw(ACCOUNT_ID, { value: toMoney(100) })).resolves.toBe(created);
+      await expect(
+        service.withdraw(ACCOUNT_ID, { value: toMoney(100) }),
+      ).resolves.toBe(created);
       const updateArg = innerTx.account.update.mock.calls[0][0];
       expect(String(updateArg.data.balance)).toBe('-50');
     });
 
     it('rejects when daily withdrawal limit would be exceeded', async () => {
       innerTx.$queryRaw.mockResolvedValue([buildRow()]);
-      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(400) } });
-      await expect(service.withdraw(ACCOUNT_ID, { value: toMoney(150) })).rejects.toBeInstanceOf(
-        UnprocessableEntityException,
-      );
+      innerTx.transaction.aggregate.mockResolvedValue({
+        _sum: { value: new Decimal(400) },
+      });
+      await expect(
+        service.withdraw(ACCOUNT_ID, { value: toMoney(150) }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
     it('allows a withdrawal that exactly hits the daily limit', async () => {
       innerTx.$queryRaw.mockResolvedValue([buildRow()]);
-      innerTx.transaction.aggregate.mockResolvedValue({ _sum: { value: new Decimal(400) } });
+      innerTx.transaction.aggregate.mockResolvedValue({
+        _sum: { value: new Decimal(400) },
+      });
       innerTx.account.update.mockResolvedValue({});
       const created = buildTx({ type: 'WITHDRAWAL' });
       innerTx.transaction.create.mockResolvedValue(created);
 
-      await expect(service.withdraw(ACCOUNT_ID, { value: toMoney(100) })).resolves.toBe(created);
+      await expect(
+        service.withdraw(ACCOUNT_ID, { value: toMoney(100) }),
+      ).resolves.toBe(created);
     });
   });
 
@@ -174,8 +204,14 @@ describe('TransactionsService', () => {
     it('returns matching transactions with deposit/withdrawal totals and net amount', async () => {
       db.account.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
       db.transaction.findMany.mockResolvedValue([
-        buildTx({ type: 'DEPOSIT', value: new Decimal(300) as unknown as Transaction['value'] }),
-        buildTx({ type: 'WITHDRAWAL', value: new Decimal(120) as unknown as Transaction['value'] }),
+        buildTx({
+          type: 'DEPOSIT',
+          value: new Decimal(300) as unknown as Transaction['value'],
+        }),
+        buildTx({
+          type: 'WITHDRAWAL',
+          value: new Decimal(120) as unknown as Transaction['value'],
+        }),
       ]);
 
       const statement = await service.search({ accountId: ACCOUNT_ID });

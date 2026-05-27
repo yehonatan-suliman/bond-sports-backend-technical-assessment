@@ -1,15 +1,18 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import type { Account } from '../../../generated/prisma/client';
-import { ACCOUNT_TYPE, ACCOUNT_TYPE_NAME } from '../../../common/constants';
-import type { AccountTypeValue } from '../../../common/constants';
+import {
+  ACCOUNT_TYPE,
+  ACCOUNT_TYPE_NAME,
+} from '../../../models/accountType.typs';
+import type { AccountTypeValue } from '../../../models/accountType.typs';
 import {
   moneyToString,
   nonNegativeMoneyQuerySchema,
   nonNegativeMoneySchema,
   positiveMoneySchema,
   toMoney,
-} from '../../../common/money';
+} from '../../../util/moneyCalc.util';
 
 export const personIdSchema = z
   .string()
@@ -50,8 +53,9 @@ const accountTypeQuerySchema = z
     accountTypeNameSchema,
     z.enum(['1', '2']).transform((s) => Number(s) as 1 | 2),
   ])
-  .transform((value): AccountTypeValue =>
-    typeof value === 'string' ? ACCOUNT_TYPE[value] : value,
+  .transform(
+    (value): AccountTypeValue =>
+      typeof value === 'string' ? ACCOUNT_TYPE[value] : value,
   );
 
 const booleanQuerySchema = z

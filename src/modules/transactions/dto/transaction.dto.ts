@@ -6,7 +6,7 @@ import {
   nonNegativeMoneyQuerySchema,
   positiveMoneySchema,
   toMoney,
-} from '../../../common/money';
+} from '../../../util/moneyCalc.util';
 
 export const createTransactionSchema = z
   .object({
@@ -14,7 +14,9 @@ export const createTransactionSchema = z
   })
   .strict();
 
-export class CreateTransactionDto extends createZodDto(createTransactionSchema) {}
+export class CreateTransactionDto extends createZodDto(
+  createTransactionSchema,
+) {}
 
 export const searchTransactionsSchema = z
   .object({
@@ -28,7 +30,9 @@ export const searchTransactionsSchema = z
   })
   .strict();
 
-export class SearchTransactionsDto extends createZodDto(searchTransactionsSchema) {}
+export class SearchTransactionsDto extends createZodDto(
+  searchTransactionsSchema,
+) {}
 
 export const transactionResponseSchema = z.object({
   transactionId: z.uuid(),
@@ -38,7 +42,9 @@ export const transactionResponseSchema = z.object({
   transactionDate: z.iso.datetime(),
 });
 
-export class TransactionResponseDto extends createZodDto(transactionResponseSchema) {
+export class TransactionResponseDto extends createZodDto(
+  transactionResponseSchema,
+) {
   static from(tx: Transaction): TransactionResponseDto {
     return {
       transactionId: tx.transactionId,
@@ -60,4 +66,6 @@ export const statementResponseSchema = z.object({
   netAmount: z.string(),
 });
 
-export class StatementResponseDto extends createZodDto(statementResponseSchema) {}
+export class StatementResponseDto extends createZodDto(
+  statementResponseSchema,
+) {}

@@ -11,9 +11,13 @@ import {
   Transaction,
   TransactionType,
 } from '../../generated/prisma/client';
-import { ACCOUNT_TYPE } from '../../common/constants';
+import { ACCOUNT_TYPE } from '../../models/accountType.typs';
 import { DatabaseService } from '../../database/database.service';
-import { moneyToString, toMoney } from '../../common/money';
+import {
+  moneyToString,
+  toDecimalFilter,
+  toMoney,
+} from '../../util/moneyCalc.util';
 import {
   CreateTransactionDto,
   SearchTransactionsDto,
@@ -59,7 +63,7 @@ export class TransactionsService {
       }
     }
 
-    const value = this.toDecimalFilter(
+    const value = toDecimalFilter(
       filters.value,
       filters.minValue,
       filters.maxValue,
@@ -99,25 +103,12 @@ export class TransactionsService {
 
     return {
       accountId: filters.accountId ?? null,
-      from: from?.toISOString() ?? null,
-      to: to?.toISOString() ?? null,
+      from: from ? from.toISOString() : null,
+      to: to ? to.toISOString() : null,
       transactions: transactions.map(TransactionResponseDto.from),
       totalDeposits: moneyToString(totals.deposits),
       totalWithdrawals: moneyToString(totals.withdrawals),
       netAmount: moneyToString(totals.deposits.minus(totals.withdrawals)),
-    };
-  }
-
-  private toDecimalFilter(
-    eq?: Decimal,
-    min?: Decimal,
-    max?: Decimal,
-  ): Prisma.TransactionWhereInput['value'] {
-    if (eq !== undefined) return eq;
-    if (min === undefined && max === undefined) return undefined;
-    return {
-      ...(min !== undefined ? { gte: min } : {}),
-      ...(max !== undefined ? { lte: max } : {}),
     };
   }
 
@@ -187,7 +178,6 @@ export class TransactionsService {
     account: LockedAccount,
     value: Decimal,
   ): Promise<void> {
-    // const limit = account.daily_withdrawal_limit;
     const {
       daily_withdrawal_limit: limit,
       account_type: type,

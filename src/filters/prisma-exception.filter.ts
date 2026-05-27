@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { Prisma } from '../../generated/prisma/client';
+import { Prisma } from '../generated/prisma/client';
 
 @Catch(Prisma.PrismaClientKnownRequestError, Prisma.PrismaClientValidationError)
 export class PrismaExceptionFilter implements ExceptionFilter {
@@ -42,13 +42,22 @@ export class PrismaExceptionFilter implements ExceptionFilter {
 
     switch (exception.code) {
       case 'P2002':
-        return { status: HttpStatus.CONFLICT, message: 'Unique constraint violation' };
+        return {
+          status: HttpStatus.CONFLICT,
+          message: 'Unique constraint violation',
+        };
       case 'P2025':
         return { status: HttpStatus.NOT_FOUND, message: 'Record not found' };
       case 'P2003':
-        return { status: HttpStatus.BAD_REQUEST, message: 'Foreign key constraint violation' };
+        return {
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Foreign key constraint violation',
+        };
       default:
-        return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: 'Database error' };
+        return {
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: 'Database error',
+        };
     }
   }
 }
