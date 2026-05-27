@@ -1,12 +1,11 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import type { Transaction } from '../../../generated/prisma/client';
+import { moneyToString, toMoney } from '../../../util/calc.util';
 import {
-  moneyToString,
   nonNegativeMoneyQuerySchema,
   positiveMoneySchema,
-  toMoney,
-} from '../../../util/moneyCalc.util';
+} from 'src/models/money.model';
 
 export const createTransactionSchema = z
   .object({
@@ -65,16 +64,3 @@ export const statementQuerySchema = z
   .strict();
 
 export class StatementQueryDto extends createZodDto(statementQuerySchema) {}
-
-export const statementResponseSchema = z.object({
-  accountId: z.uuid(),
-  from: z.iso.datetime(),
-  to: z.iso.datetime(),
-  transactions: z.array(transactionResponseSchema),
-  totalDeposits: z.string(),
-  totalWithdrawals: z.string(),
-});
-
-export class StatementResponseDto extends createZodDto(
-  statementResponseSchema,
-) {}

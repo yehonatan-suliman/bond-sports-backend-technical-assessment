@@ -4,8 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Account, Prisma } from '../../generated/prisma/client';
-import { ACCOUNT_TYPE_NAME } from '../../models/accountType.typs';
-import { toDecimalFilter } from '../../util/moneyCalc.util';
+import { ACCOUNT_TYPE_NAME } from '../../models/accountType.model';
+import { toDecimalFilter } from '../../util/calc.util';
 import { DatabaseService } from '../../database/database.service';
 import {
   CreateAccountDto,
@@ -51,7 +51,6 @@ export class AccountsService {
 
   async search(filters: SearchAccountsDto) {
     const where: Prisma.AccountWhereInput = {
-      ...(filters.accountId ? { accountId: filters.accountId } : {}),
       ...(filters.personId ? { personId: filters.personId } : {}),
       ...(filters.accountType !== undefined
         ? { accountType: filters.accountType }

@@ -19,7 +19,7 @@ import { AllExceptionsFilter } from './error/catch-all-exception.filter';
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
-    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_FILTER, useClass: PrismaExceptionFilter },
   ],
 })

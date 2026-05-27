@@ -2,7 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Decimal } from 'decimal.js';
 import { Account } from '../../generated/prisma/client';
-import { toMoney } from '../../util/moneyCalc.util';
+import { toMoney } from '../../util/calc.util';
 import { DatabaseService } from '../../database/database.service';
 import { AccountsService } from './accounts.service';
 
@@ -143,7 +143,9 @@ describe('AccountsService', () => {
     });
 
     it('filters by accountId', async () => {
-      await service.search({ accountId: '11111111-1111-1111-1111-111111111111' });
+      await service.search({
+        accountId: '11111111-1111-1111-1111-111111111111',
+      });
       expect(whereOf()).toEqual({
         accountId: '11111111-1111-1111-1111-111111111111',
       });
@@ -223,7 +225,9 @@ describe('AccountsService', () => {
       account.findUnique.mockResolvedValue(found);
       account.update.mockResolvedValue({
         ...found,
-        dailyWithdrawalLimit: toMoney(750) as unknown as Account['dailyWithdrawalLimit'],
+        dailyWithdrawalLimit: toMoney(
+          750,
+        ) as unknown as Account['dailyWithdrawalLimit'],
       });
 
       await service.updateLimit(found.accountId, {
