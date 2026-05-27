@@ -36,15 +36,15 @@ interface LockedAccount {
 export class TransactionsService {
   constructor(private readonly db: DatabaseService) {}
 
-  deposit(accountId: string, dto: CreateTransactionDto): Promise<Transaction> {
+  deposit(accountId: string, dto: CreateTransactionDto) {
     return this.processTransaction(accountId, dto, 'DEPOSIT');
   }
 
-  withdraw(accountId: string, dto: CreateTransactionDto): Promise<Transaction> {
+  withdraw(accountId: string, dto: CreateTransactionDto) {
     return this.processTransaction(accountId, dto, 'WITHDRAWAL');
   }
 
-  async search(filters: SearchTransactionsDto): Promise<Transaction[]> {
+  async search(filters: SearchTransactionsDto) {
     const from = filters.from ? new Date(filters.from) : undefined;
     const to = filters.to ? new Date(filters.to) : undefined;
     if (from && to && from > to) {
@@ -79,17 +79,16 @@ export class TransactionsService {
     });
   }
 
-  async getStatement(
-    accountId: string,
-    query: StatementQueryDto,
-  ): Promise<StatementResponseDto> {
+  async getStatement(accountId: string, query: StatementQueryDto) {
     const account = await this.db.account.findUnique({ where: { accountId } });
     if (!account) {
       throw new NotFoundException(`Account ${accountId} not found`);
     }
 
     const to = query.to ? new Date(query.to) : new Date();
-    const from = query.from ? new Date(query.from) : this.daysBefore(to, STATEMENT_DEFAULT_WINDOW_DAYS);
+    const from = query.from
+      ? new Date(query.from)
+      : this.daysBefore(to, STATEMENT_DEFAULT_WINDOW_DAYS);
     if (from > to) {
       throw new BadRequestException(
         '`from` must be earlier than or equal to `to`',
@@ -150,7 +149,7 @@ export class TransactionsService {
     accountId: string,
     dto: CreateTransactionDto,
     type: TransactionType,
-  ): Promise<Transaction> {
+  ) {
     const value = this.normalizeValue(dto.value);
 
     return this.db.$transaction(
@@ -246,7 +245,7 @@ export class TransactionsService {
     accountId: string,
     value: Decimal,
     limit: Decimal,
-  ): Promise<void> {
+  ) {
     const totalDailyWithdrawal = await this.sumTodayWithdrawal(tx, accountId);
     const projectedTotal = totalDailyWithdrawal.plus(value);
     if (projectedTotal.gt(limit)) {
@@ -258,7 +257,7 @@ export class TransactionsService {
     type: number,
     currentBalance: Decimal,
     value: Decimal,
-  ): void {
+  ) {
     if (type === ACCOUNT_TYPE.SAVINGS && currentBalance.lt(value)) {
       throw new UnprocessableEntityException(
         'Savings account balance cannot go negative',
@@ -272,7 +271,7 @@ export class TransactionsService {
     currentBalance: Decimal,
     value: Decimal,
     type: TransactionType,
-  ): Promise<Transaction> {
+  ) {
     const newBalance =
       type === 'DEPOSIT'
         ? currentBalance.plus(value)

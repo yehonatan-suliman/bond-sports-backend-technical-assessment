@@ -26,25 +26,21 @@ export class AccountsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new account' })
-  async create(@Body() dto: CreateAccountDto): Promise<AccountResponseDto> {
+  async create(@Body() dto: CreateAccountDto) {
     const account = await this.service.create(dto);
     return AccountResponseDto.from(account);
   }
 
   @Get()
   @ApiOperation({ summary: 'Search accounts by optional filters' })
-  async search(
-    @Query() filters: SearchAccountsDto,
-  ): Promise<AccountResponseDto[]> {
+  async search(@Query() filters: SearchAccountsDto) {
     const accounts = await this.service.search(filters);
     return accounts.map(AccountResponseDto.from);
   }
 
   @Get(':accountId')
   @ApiOperation({ summary: 'Get an account by id' })
-  async getById(
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
-  ): Promise<AccountResponseDto> {
+  async getById(@Param('accountId', new ParseUUIDPipe()) accountId: string) {
     const account = await this.service.getById(accountId);
     return AccountResponseDto.from(account);
   }
@@ -55,7 +51,7 @@ export class AccountsController {
   async updateLimit(
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
     @Body() dto: UpdateLimitDto,
-  ): Promise<{ message: string }> {
+  ) {
     await this.service.updateLimit(accountId, dto);
     return { message: 'Daily withdrawal limit updated' };
   }
@@ -63,9 +59,7 @@ export class AccountsController {
   @Patch(':accountId/block')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Block (deactivate) an account' })
-  async block(
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
-  ): Promise<{ message: string }> {
+  async block(@Param('accountId', new ParseUUIDPipe()) accountId: string) {
     await this.service.block(accountId);
     return { message: 'Account blocked' };
   }
@@ -73,9 +67,7 @@ export class AccountsController {
   @Patch(':accountId/activate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reactivate a blocked account' })
-  async activate(
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
-  ): Promise<{ message: string }> {
+  async activate(@Param('accountId', new ParseUUIDPipe()) accountId: string) {
     await this.service.activate(accountId);
     return { message: 'Account activated' };
   }
