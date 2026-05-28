@@ -15,7 +15,10 @@ COPY prisma.config.ts ./
 COPY tsconfig*.json nest-cli.json ./
 COPY src ./src
 
+RUN yarn prisma:generate
+RUN yarn build
+
 EXPOSE 3000
 
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "yarn prisma:generate && yarn build && node dist/src/main.js"]
+CMD ["node", "dist/src/main.js"]
