@@ -44,13 +44,13 @@ export const transactionResponseSchema = z.object({
 export class TransactionResponseDto extends createZodDto(
   transactionResponseSchema,
 ) {
-  static from(tx: Transaction): TransactionResponseDto {
+  static from(transaction: Transaction): TransactionResponseDto {
     return {
-      transactionId: tx.transactionId,
-      accountId: tx.accountId,
-      value: moneyToString(toMoney(tx.value.toString())),
-      type: tx.type,
-      transactionDate: tx.transactionDate.toISOString(),
+      transactionId: transaction.transactionId,
+      accountId: transaction.accountId,
+      value: moneyToString(toMoney(transaction.value.toString())),
+      type: transaction.type,
+      transactionDate: transaction.transactionDate.toISOString(),
     };
   }
 }

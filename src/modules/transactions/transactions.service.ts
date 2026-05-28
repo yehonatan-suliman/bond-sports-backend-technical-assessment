@@ -138,17 +138,17 @@ export class TransactionsService {
     const value = this.normalizeValue(dto.value);
 
     return this.db.$transaction(
-      async (tx) => {
-        const account = await this.lockAccount(tx, accountId);
+      async (dbClient) => {
+        const account = await this.lockAccount(dbClient, accountId);
         this.accountActiveCheck(account);
 
         if (type === 'WITHDRAWAL') {
-          await this.withdrawalAllowedCheck(tx, account, value);
+          await this.withdrawalAllowedCheck(dbClient, account, value);
         }
 
         const currentBalance = account.balance;
         return this.applyTransaction(
-          tx,
+          dbClient,
           accountId,
           currentBalance,
           value,
@@ -168,8 +168,11 @@ export class TransactionsService {
     return value;
   }
 
-  private async lockAccount(tx: Prisma.TransactionClient, accountId: string) {
-    const [account] = await tx.$queryRaw<LockedAccount[]>(Prisma.sql`
+  private async lockAccount(
+    dbClient: Prisma.TransactionClient,
+    accountId: string,
+  ) {
+    const [account] = await dbClient.$queryRaw<LockedAccount[]>(Prisma.sql`
       SELECT "accountId" AS account_id,
              "balance",
              "dailyWithdrawalLimit" AS daily_withdrawal_limit,
@@ -192,7 +195,7 @@ export class TransactionsService {
   }
 
   private async withdrawalAllowedCheck(
-    tx: Prisma.TransactionClient,
+    dbClient: Prisma.TransactionClient,
     account: LockedAccount,
     value: Decimal,
   ): Promise<void> {
@@ -202,19 +205,19 @@ export class TransactionsService {
       balance,
       account_id: accountId,
     } = account;
-    await this.withinDailyLimitCheck(tx, accountId, value, limit);
+    await this.withinDailyLimitCheck(dbClient, accountId, value, limit);
     this.notSavingsOverdraftCheck(type, balance, value);
   }
 
   private async sumTodayWithdrawal(
-    tx: Prisma.TransactionClient,
+    dbClient: Prisma.TransactionClient,
     accountId: string,
   ) {
     const startOfDay = new Date();
     startOfDay.setUTCHours(0, 0, 0, 0);
     const endOfDay = new Date();
     endOfDay.setUTCHours(23, 59, 59, 999);
-    const sumResult = await tx.transaction.aggregate({
+    const sumResult = await dbClient.transaction.aggregate({
       where: {
         accountId,
         type: 'WITHDRAWAL',
@@ -226,12 +229,15 @@ export class TransactionsService {
   }
 
   private async withinDailyLimitCheck(
-    tx: Prisma.TransactionClient,
+    dbClient: Prisma.TransactionClient,
     accountId: string,
     value: Decimal,
     limit: Decimal,
   ) {
-    const totalDailyWithdrawal = await this.sumTodayWithdrawal(tx, accountId);
+    const totalDailyWithdrawal = await this.sumTodayWithdrawal(
+      dbClient,
+      accountId,
+    );
     const projectedTotal = totalDailyWithdrawal.plus(value);
     if (projectedTotal.gt(limit)) {
       throw new UnprocessableEntityException('Daily withdrawal limit exceeded');
@@ -251,7 +257,7 @@ export class TransactionsService {
   }
 
   private async applyTransaction(
-    tx: Prisma.TransactionClient,
+    dbClient: Prisma.TransactionClient,
     accountId: string,
     currentBalance: Decimal,
     value: Decimal,
@@ -262,10 +268,10 @@ export class TransactionsService {
         ? currentBalance.plus(value)
         : currentBalance.minus(value);
 
-    await tx.account.update({
+    await dbClient.account.update({
       where: { accountId },
       data: { balance: new Prisma.Decimal(newBalance) },
     });
-    return tx.transaction.create({ data: { accountId, value, type } });
+    return dbClient.transaction.create({ data: { accountId, value, type } });
   }
 }
