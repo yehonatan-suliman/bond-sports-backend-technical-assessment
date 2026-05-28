@@ -138,7 +138,7 @@ describe('AccountsService', () => {
       await service.search({});
       expect(whereOf()).toEqual({});
       expect(account.findMany.mock.calls[0][0].orderBy).toEqual({
-        createDate: 'desc',
+        createDate: 'asc',
       });
     });
 

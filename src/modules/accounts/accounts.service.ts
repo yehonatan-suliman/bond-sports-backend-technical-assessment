@@ -76,7 +76,7 @@ export class AccountsService {
 
     return this.db.account.findMany({
       where,
-      orderBy: { createDate: 'desc' },
+      orderBy: { createDate: 'asc' },
     });
   }
 
